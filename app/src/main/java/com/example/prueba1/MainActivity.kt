@@ -638,7 +638,8 @@ fun Banner1() {
         factory = { context ->
             AdManagerAdView(context).apply {
                 setAdSize(AdSize.FLUID) // Utiliza un tamaño de anuncio adaptable
-                adUnitId = "ca-app-pub-6966530780523209/6434493241" // ID de prueba
+                adUnitId = "ca-app-pub-3940256099942544/9214589741"// ID de prueba
+                //ca-app-pub-6966530780523209/6434493241
                 loadAd(adRequest)
             }
         },
