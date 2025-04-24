@@ -69,6 +69,7 @@ dependencies {
     implementation("org.apache.poi:poi-ooxml:5.2.5")
     implementation("com.google.android.gms:play-services-ads:23.1.0")
     implementation("com.google.firebase:firebase-ads:21.5.0")
+    implementation ("com.journeyapps:zxing-android-embedded:4.3.0")
     //implementation ("androidx.compose.material3:material3:1.0.0-alpha01")
     // Eliminado com.android.support:support-v4
     androidTestImplementation(libs.androidx.junit)
@@ -77,4 +78,11 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    //cam
+
+    //websocket
+    implementation ("com.squareup.okhttp3:okhttp:4.10.0")
+    implementation ("com.squareup.okio:okio:3.3.0")
+
+
 }
