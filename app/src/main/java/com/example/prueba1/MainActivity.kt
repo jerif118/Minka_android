@@ -95,11 +95,10 @@ class MainActivity : ComponentActivity() {
 
 
         setContent {
-            Prueba1Theme {
-                val navController = rememberNavController()
+            Theme {
+                val nav = rememberNavController()
                 val vm: NotificationViewModel = viewModel()
 
-                // Vinculamos el listener del servicio con el ViewModel
                 DisposableEffect(Unit) {
                     MyNotificationListenerService.notificationListener = vm::addNotification
                     onDispose {
@@ -108,33 +107,11 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                NavHost(
-                    navController   = navController,
-                    startDestination = "main"
-                ) {
-                    composable("main") {
-                        MainScreen(
-                            notifications        = vm.notifications,
-                            onManageAppsClicked  = {
-                                startActivity(
-                                    Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                                )
-                            },
-                            onAppSettings        = { navController.navigate("settings") },
-                            onFabClicked         = { navController.navigate("herramientas") },
-                            onOpenCameraClicked  = { qrScanner.initiateQrScan() }
-                        )
-                    }
-                    composable("settings") {
-                        AppSettingsScreen(onBack = { navController.navigateUp() })
-                    }
-                    composable("herramientas") {
-                        HerramientasScreen(navController)
-                    }
-                    composable("resumen_de_ingresos") {
-                        ResumenDeIngresosScreen(vm)
-                    }
-                }
+                MainScreen(
+                    navController = nav,
+                    vm           = vm ,
+                    onOpenCameraClicked  = { qrScanner.initiateQrScan() }
+                )
             }
         }
     }
@@ -147,7 +124,7 @@ class MainActivity : ComponentActivity() {
                 val info = Gson().fromJson(contents, QrInfo::class.java)
                 val clientId = "mobile-${UUID.randomUUID()}"
                 WebSocketManager.connect(
-                    hostServidor = "192.168.1.38:5001",   // • usa 10.0.2.2 en emulador
+                    hostServidor = "192.168.1.10:5001",   // • usa 10.0.2.2 en emulador
                     clientId     = clientId,
                     roomId       = info.room_id,
                     password     = info.password

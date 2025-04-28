@@ -1,5 +1,7 @@
 package com.minka.app
 
+import android.widget.Toast
+
 import android.content.Context
 import androidx.core.content.FileProvider
 import com.minka.app.NotificationData
@@ -30,6 +32,7 @@ fun exportToExcel(activity: Context, notificaciones: List<NotificationData>) {
     val fileName = "ResumenIngresos.xlsx"
     val file = File(activity.getExternalFilesDir(null), fileName)
     FileOutputStream(file).use { workbook.write(it) }
+    Toast.makeText(activity, "Archivo guardado en: ${file.absolutePath}", Toast.LENGTH_LONG).show()
     workbook.close()
 
     val uri: Uri = FileProvider.getUriForFile(

@@ -1,5 +1,6 @@
 package com.minka.app
 
+import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
@@ -17,6 +18,7 @@ fun Drawable.toBitmap(): Bitmap {
     return bmp
 }
 
+@SuppressLint("SuspiciousModifierThen")
 fun Modifier.clearContentAfter(): Modifier = this.then(
     layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)

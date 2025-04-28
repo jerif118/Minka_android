@@ -33,6 +33,24 @@ class MyNotificationListenerService : NotificationListenerService() {
 
         /** Callback que tu ViewModel registra en MainActivity */
         var notificationListener: ((NotificationData) -> Unit)? = null
+
+        // Mapa de filtros de título por paquete para validación adicional
+        private val titleFilters = mapOf(
+            "com.bcp.innovacxion.yapeapp" to listOf("confirmación de pago", "confirmacion de pago"),
+            "com.applemoncash"          to listOf("recibiste s/", "recibiste ")
+        )
+
+        // Map of regex patterns by package to validate notification body
+        private val contentFilters = mapOf(
+            "com.bcp.innovacxion.yapeapp" to Pattern.compile(
+                "yape!\\s*.+?te envió un pago por\\s*s/\\s*[0-9]+(?:[.,][0-9]{1,2})?",
+                Pattern.CASE_INSENSITIVE
+            ),
+            "com.applemoncash" to Pattern.compile(
+                "recibiste\\s*s/\\s*[0-9]+(?:[.,][0-9]{1,2})?",
+                Pattern.CASE_INSENSITIVE
+            )
+        )
     }
 
     /* ───────────── Al conectar, intenta cargar selección del usuario ────── */
@@ -62,6 +80,18 @@ class MyNotificationListenerService : NotificationListenerService() {
         val extras = sbn.notification.extras
         val title  = extras.getString("android.title")
         val text   = extras.getCharSequence("android.text")?.toString()
+        // Validación de títulos permitidos por paquete, si existe filtro
+        val filters = titleFilters[sbn.packageName]
+        if (filters != null) {
+            val titleLower = title?.lowercase() ?: ""
+            if (filters.none { keyword -> titleLower.contains(keyword) }) return
+        }
+        // Validar contenido del mensaje si hay un filtro definido
+        val contentPattern = contentFilters[sbn.packageName]
+        if (contentPattern != null) {
+            val textLower = text?.lowercase() ?: ""
+            if (!contentPattern.matcher(textLower).find()) return
+        }
         val appLbl = getApplicationName(packageManager, sbn.packageName)
 
         // 3) Parsear para extraer monto y remitente
@@ -132,12 +162,15 @@ class MyNotificationListenerService : NotificationListenerService() {
                     }
                 }
                 "com.bcp.innovacxion.yapeapp" -> { // Yape
-                    if (fullText.contains("te envió") || fullText.contains("te yapeo")) {
-                        val senderPattern = Pattern.compile("([\\w\\s]+?)\\s+te", Pattern.CASE_INSENSITIVE)
-                        val senderMatcher = senderPattern.matcher(fullText)
-                        if (senderMatcher.find()) {
-                            sender = senderMatcher.group(1).trim()
-                        }
+                    // Extract sender name and amount from Yape payment confirmation
+                    val pattern = Pattern.compile(
+                        "yape!\\s*(.+?)\\s+te envió un pago por\\s*s/\\s*([0-9]+(?:[.,][0-9]{1,2})?)",
+                        Pattern.CASE_INSENSITIVE
+                    )
+                    val matcher = pattern.matcher(fullText)
+                    if (matcher.find()) {
+                        sender = matcher.group(1).trim()
+                        amount = matcher.group(2).replace(",", ".").toDoubleOrNull() ?: amount
                     }
                 }
                 "com.applemoncash" -> { // Lemon Cash

@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.minka.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.minka.app"
@@ -70,6 +70,21 @@ dependencies {
     implementation("com.google.android.gms:play-services-ads:23.1.0")
     implementation("com.google.firebase:firebase-ads:21.5.0")
     implementation ("com.journeyapps:zxing-android-embedded:4.3.0")
+    //Material 3
+    implementation (libs.material3)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.camera.core)
+    val composeBom = platform("androidx.compose:compose-bom:2025.02.00")
+    implementation(composeBom)
+    testImplementation(composeBom)
+    androidTestImplementation(composeBom)
+    // Abril-25
+    implementation (libs.androidx.compose.material3.material3)          // 1.3.2 estable
+    implementation (libs.androidx.material3.window.size.class1)
+    implementation (libs.androidx.material3.adaptive.navigation.suite)
+    implementation (libs.androidx.runtime.livedata)
+    //icons
+    implementation (libs.androidx.material.icons.extended)
     //implementation ("androidx.compose.material3:material3:1.0.0-alpha01")
     // Eliminado com.android.support:support-v4
     androidTestImplementation(libs.androidx.junit)
