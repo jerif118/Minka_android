@@ -124,7 +124,7 @@ class MainActivity : ComponentActivity() {
                 val info = Gson().fromJson(contents, QrInfo::class.java)
                 val clientId = "mobile-${UUID.randomUUID()}"
                 WebSocketManager.connect(
-                    hostServidor = "192.168.1.10:5001",   // • usa 10.0.2.2 en emulador
+                    hostServidor = "192.168.128.121:5001",   // • usa 10.0.2.2 en emulador
                     clientId     = clientId,
                     roomId       = info.room_id,
                     password     = info.password

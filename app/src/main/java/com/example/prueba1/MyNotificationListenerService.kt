@@ -26,9 +26,12 @@ class MyNotificationListenerService : NotificationListenerService() {
     companion object {
         /** Recibirás TODO lo que provenga de estos paquetes */
         var allowedPackages = mutableStateListOf(
-            "pe.com.interbank.mobilebanking",      // Plin
-            "com.bcp.innovacxion.yapeapp",         // Yape
-            "com.applemoncash"                     // Lemon Cash
+            "pe.com.interbank.mobilebanking", //interbank
+            "com.bcp.innovacxion.yapeapp", //yape
+            "com.applemoncash", //lemon
+            "com.bitel.bipay", //bipay
+            "pe.indigital.tunki.user", //agora
+            "com.pdp.bim"  //bim
         )
 
         /** Callback que tu ViewModel registra en MainActivity */
@@ -37,17 +40,30 @@ class MyNotificationListenerService : NotificationListenerService() {
         // Mapa de filtros de título por paquete para validación adicional
         private val titleFilters = mapOf(
             "com.bcp.innovacxion.yapeapp" to listOf("confirmación de pago", "confirmacion de pago"),
-            "com.applemoncash"          to listOf("recibiste s/", "recibiste ")
+            "com.applemoncash"          to listOf("recibiste s/", "recibiste "),
+            "pe.com.interbank.mobilebanking" to listOf("Interbank", "interbank"),
+            "pe.indigital.tunki.user" to listOf(
+                "oh!pay | recibiste un pago",
+                "oh!pay|recibiste un pago"
+            )
         )
 
         // Map of regex patterns by package to validate notification body
         private val contentFilters = mapOf(
             "com.bcp.innovacxion.yapeapp" to Pattern.compile(
-                "yape!\\s*.+?te envió un pago por\\s*s/\\s*[0-9]+(?:[.,][0-9]{1,2})?",
+                "(?:yape!\\s*.+?te envió un pago por\\s*s/\\s*[0-9]+(?:[.,][0-9]{1,2})?|te envió un pago por\\s*s/\\s*[0-9]+(?:[.,][0-9]{1,2})?)",
                 Pattern.CASE_INSENSITIVE
             ),
             "com.applemoncash" to Pattern.compile(
-                "recibiste\\s*s/\\s*[0-9]+(?:[.,][0-9]{1,2})?",
+                "(?:recibiste\\s*s/\\s*[0-9]+(?:[.,][0-9]{1,2})?)|(?:te envió dinero)",
+                Pattern.CASE_INSENSITIVE
+            ),
+            "pe.com.interbank.mobilebanking" to Pattern.compile(
+                "\\s*.+?te ha plineado\\s*s/\\s*[0-9]+(?:[.,][0-9]{1,2})?",
+                Pattern.CASE_INSENSITIVE
+            ),
+            "pe.indigital.tunki.user" to Pattern.compile(
+                "\\s*.+?te pagó\\s*s/\\s*[0-9]+(?:[.,][0-9]{1,2})?",
                 Pattern.CASE_INSENSITIVE
             )
         )
@@ -153,33 +169,63 @@ class MyNotificationListenerService : NotificationListenerService() {
             // Extraer remitente según la app
             when (packageName) {
                 "pe.com.interbank.mobilebanking" -> { // Plin
-                    if (fullText.contains("recibiste")) {
-                        val senderPattern = Pattern.compile("(?:de|from)\\s+([\\w\\s]+?)(?:\\.|\\s+te)", Pattern.CASE_INSENSITIVE)
-                        val senderMatcher = senderPattern.matcher(fullText)
-                        if (senderMatcher.find()) {
-                            sender = senderMatcher.group(1).trim()
-                        }
-                    }
-                }
-                "com.bcp.innovacxion.yapeapp" -> { // Yape
-                    // Extract sender name and amount from Yape payment confirmation
+                    // Extract sender and amount from Interbank Plin notifications
+                    val body = text ?: ""
                     val pattern = Pattern.compile(
-                        "yape!\\s*(.+?)\\s+te envió un pago por\\s*s/\\s*([0-9]+(?:[.,][0-9]{1,2})?)",
+                        "(.+?)\\s+te ha plineado\\s*s/\\s*([0-9]+(?:[.,][0-9]{1,2})?)",
                         Pattern.CASE_INSENSITIVE
                     )
-                    val matcher = pattern.matcher(fullText)
+                    val matcher = pattern.matcher(body)
                     if (matcher.find()) {
+                        // Sender name
                         sender = matcher.group(1).trim()
+                        // Amount override (optional, based on group)
                         amount = matcher.group(2).replace(",", ".").toDoubleOrNull() ?: amount
+                    }
+
+                }
+                "com.bcp.innovacxion.yapeapp" -> { // Yape
+                    // Extract sender, amount, and optional security code from Yape notifications
+                    val body = text ?: ""
+
+                    // Combined pattern: optional "Yape!" prefix, sender, amount, and optional code
+                    val pattern = Pattern.compile(
+                        "(?:yape!?\\s*)?(.+?)\\s+te envió un pago por\\s*s/\\s*([0-9]+(?:[.,][0-9]{1,2})?)(?:.*?c[oó]d(?:\\.o)?\\s*de seguridad\\s*(?:es)?[: ]*([0-9]+))?",
+                        Pattern.CASE_INSENSITIVE
+                    )
+                    val matcher = pattern.matcher(body)
+                    if (matcher.find()) {
+                        // Sender name
+                        sender = matcher.group(1).trim()
+                        // Amount
+                        amount = matcher.group(2).replace(",", ".").toDoubleOrNull() ?: amount
+                        // Security code, if present
+                        val codeGroup = matcher.group(3)
+                        if (!codeGroup.isNullOrBlank()) {
+                            sender = "$sender (Código: ${codeGroup.trim()})"
+                        }
                     }
                 }
                 "com.applemoncash" -> { // Lemon Cash
-                    if (fullText.contains("recibiste")) {
-                        val senderPattern = Pattern.compile("de\\s+([\\w\\s]+)", Pattern.CASE_INSENSITIVE)
-                        val senderMatcher = senderPattern.matcher(fullText)
-                        if (senderMatcher.find()) {
-                            sender = senderMatcher.group(1).trim()
-                        }
+                    // Use the notification body to extract the sender’s name
+                    val body = text ?: ""
+                    val patternLC = Pattern.compile("(.+?) te envió dinero", Pattern.CASE_INSENSITIVE)
+                    val matcherLC = patternLC.matcher(body)
+                    if (matcherLC.find()) {
+                        sender = matcherLC.group(1).trim()
+                    }
+                }
+                "pe.indigital.tunki.user" -> { // Tunki / Agora
+                    // Extract sender and amount from Tunki payment notifications using the notification text only
+                    val body = text ?: ""
+                    val pattern = Pattern.compile(
+                        "(.+?)\\s+te pagó\\s*s/\\s*([0-9]+(?:[.,][0-9]{1,2})?)",
+                        Pattern.CASE_INSENSITIVE
+                    )
+                    val matcher = pattern.matcher(body)
+                    if (matcher.find()) {
+                        sender = matcher.group(1).trim()
+                        amount = matcher.group(2).replace(",", ".").toDoubleOrNull() ?: amount
                     }
                 }
             }
@@ -188,6 +234,8 @@ class MyNotificationListenerService : NotificationListenerService() {
             Log.e("NotificationParser", "Error parsing notification", e)
         }
 
+        // Convert sender name to all uppercase
+        sender = sender.uppercase()
         return Pair(amount, sender)
     }
 

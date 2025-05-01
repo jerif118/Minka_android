@@ -42,7 +42,10 @@ fun AppSettingsScreen(onBack: () -> Unit) {
     val allowedPackages = listOf(
         "pe.com.interbank.mobilebanking",
         "com.bcp.innovacxion.yapeapp",
-        "com.applemoncash"
+        "com.applemoncash",
+        "com.bitel.bipay",
+        "pe.indigital.tunki.user",
+         "com.pdp.bim"
         /* … resto de paquetes … */
     )
 
@@ -93,7 +96,7 @@ fun AppSettingsScreen(onBack: () -> Unit) {
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Notificaciones activas", modifier = Modifier.weight(1f))
+                Text("Escucha activa", modifier = Modifier.weight(1f))
                 Switch(
                     checked = enabled,
                     onCheckedChange = { checked ->
