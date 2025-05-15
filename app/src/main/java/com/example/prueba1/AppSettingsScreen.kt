@@ -43,7 +43,7 @@ fun AppSettingsScreen(onBack: () -> Unit) {
         "pe.com.interbank.mobilebanking",
         "com.bcp.innovacxion.yapeapp",
         "com.applemoncash",
-        "com.bitel.bipay",
+        //"com.bitel.bipay",
         "pe.indigital.tunki.user",
          "com.pdp.bim"
         /* … resto de paquetes … */

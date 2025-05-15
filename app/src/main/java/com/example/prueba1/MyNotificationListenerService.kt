@@ -29,7 +29,7 @@ class MyNotificationListenerService : NotificationListenerService() {
             "pe.com.interbank.mobilebanking", //interbank
             "com.bcp.innovacxion.yapeapp", //yape
             "com.applemoncash", //lemon
-            "com.bitel.bipay", //bipay
+            //"com.bitel.bipay", //bipay
             "pe.indigital.tunki.user", //agora
             "com.pdp.bim"  //bim
         )
