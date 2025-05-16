@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.util.Base64
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,8 +24,6 @@ import com.example.prueba1.ui.theme.Prueba1Theme
 import com.google.gson.Gson
 import java.util.*
 import com.minka.app.NotificationViewModel
-
-data class QrInfo(val room_id: String, val password: String)
 
 class MainActivity : ComponentActivity() {
 
@@ -49,6 +48,13 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (SecureStore.loadToken(this) != null) {
+            WebSocketManager.connect(
+                hostServidor = "192.168.1.14:5001",
+                ctx = this          // sin roomId ni pairingToken
+            )
+        }
 
         /* ───────────────────────── PERMISO ANDROID 13+ ───────────────────────── */
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -121,17 +127,28 @@ class MainActivity : ComponentActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         qrScanner.handleResult(requestCode, resultCode, data)?.let { contents ->
             try {
-                val info = Gson().fromJson(contents, QrInfo::class.java)
+                // contents is the JWT pairing_token
+                val pairingToken = contents
+                // decode payload
+                val parts = pairingToken.split('.')
+                if (parts.size != 3) throw IllegalArgumentException("Token inválido")
+                val payloadJson = String(
+                    Base64.decode(parts[1], Base64.URL_SAFE),
+                    Charsets.UTF_8
+                )
+                val payloadMap: Map<*, *>? = Gson().fromJson(payloadJson, Map::class.java)
+                val roomId = payloadMap?.get("room_id") as? String
+                    ?: throw IllegalArgumentException("room_id no encontrado en token")
                 val clientId = "mobile-${UUID.randomUUID()}"
                 WebSocketManager.connect(
-                    hostServidor = "192.168.1.14:5001",   // • usa 10.0.2.2 en emulador
-                    clientId     = clientId,
-                    roomId       = info.room_id,
-                    password     = info.password
+                    hostServidor = "192.168.1.4:5001",
+                    ctx          = this,
+                    roomId       = roomId,
+                    pairingToken = pairingToken
                 )
                 Toast.makeText(
                     this,
-                    "Conectando a sala...\nRoom ID: ${info.room_id}\nPassword: ${info.password}",
+                    "Conectando a sala...\nRoom ID: $roomId",
                     Toast.LENGTH_SHORT
                 ).show()
             } catch (e: Exception) {
@@ -140,9 +157,7 @@ class MainActivity : ComponentActivity() {
                     "QR inválido\nContenido leído:\n$contents",
                     Toast.LENGTH_LONG
                 ).show()
-                e.printStackTrace()
-                Log.e("QrScanError", "Error al procesar el QR: ${e.message}")
-                Log.e("QrScanError", "Contenido escaneado: $contents", e)
+                Log.e("QrScanError", "Error al procesar el QR: ${e.message}", e)
             }
         }
     }

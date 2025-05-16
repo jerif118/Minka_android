@@ -46,6 +46,8 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // Excluir manifiestos duplicados de OSGI en versiones Java 9+
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
     }
 }
@@ -74,6 +76,7 @@ dependencies {
     implementation (libs.material3)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.camera.core)
+    implementation(libs.identity.jvm)
     val composeBom = platform("androidx.compose:compose-bom:2025.02.00")
     implementation(composeBom)
     testImplementation(composeBom)
@@ -95,6 +98,8 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     //cam
 
+    //security
+    implementation (libs.androidx.security.crypto)
     //websocket
     implementation ("com.squareup.okhttp3:okhttp:4.10.0")
     implementation ("com.squareup.okio:okio:3.3.0")
