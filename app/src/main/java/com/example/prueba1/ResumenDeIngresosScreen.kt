@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.minka.app.NotificationData
 import com.minka.app.NotificationCard
 import com.minka.app.NotificationViewModel
@@ -54,10 +55,23 @@ fun ResumenDeIngresosScreen(vm: NotificationViewModel) {
                     }
                 }
             )
+        },
+        bottomBar = {
+            Surface(tonalElevation = 4.dp) {
+                Text(
+                    text = "Total Ingresos: S/ $fmtTotal",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 14.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                )
+            }
         }
     ) { padding ->
         Column(
             modifier = Modifier
+                .fillMaxSize()
                 .padding(padding)
                 .padding(16.dp)
         ) {
@@ -69,6 +83,7 @@ fun ResumenDeIngresosScreen(vm: NotificationViewModel) {
 
             // ───── Listado de notificaciones ─────
             LazyColumn(
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(notificaciones) { notif ->
@@ -77,10 +92,7 @@ fun ResumenDeIngresosScreen(vm: NotificationViewModel) {
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Total Ingresos: S/ $fmtTotal",
-                style = MaterialTheme.typography.headlineMedium
-            )
+            // The total is now displayed in the bottomBar.
         }
     }
 }

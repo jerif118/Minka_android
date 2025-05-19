@@ -1,4 +1,6 @@
 package com.minka.app
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.unit.dp
 
 import android.os.Build
 import androidx.camera.core.Camera
@@ -95,10 +97,14 @@ fun MainScreen(navController: NavHostController, vm: NotificationViewModel,
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onOpenCameraClicked) {
+            FloatingActionButton(
+                onClick = onOpenCameraClicked,
+                modifier = Modifier.offset(y = (-42).dp)
+            ) {
                 Icon(Icons.Filled.Camera, contentDescription = "Scan QR")
             }
         },
+        floatingActionButtonPosition = FabPosition.End,
         bottomBar = {
             NavigationBar {
                 dest.forEach { dest ->
