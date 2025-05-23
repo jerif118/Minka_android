@@ -15,6 +15,14 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
+    <!-- necesario para reiniciar el servicio tras un reboot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- servicio en primer plano genérico (API 28+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+
+    <!-- servicio en primer plano para tipo dataSync (API 34+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+
 
 
 
@@ -70,6 +78,23 @@
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-6966530780523209~5739077410"/>
+
+        <!-- Servicio en primer plano que mantiene el WebSocket -->
+        <service
+            android:name="com.example.prueba1.ws.WebSocketService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"/>
+
+        <!-- Reinicia el servicio tras BOOT_COMPLETED / LOCKED_BOOT_COMPLETED -->
+        <receiver
+            android:name="com.example.prueba1.boot.BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
 
     </application>
 

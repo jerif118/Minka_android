@@ -16,13 +16,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.DisposableEffect
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.prueba1.ui.theme.Prueba1Theme
+import com.example.prueba1.ws.WebSocketManager
+import com.example.prueba1.ws.WebSocketService
 import com.google.gson.Gson
 import java.util.*
-import com.minka.app.NotificationViewModel
 
 data class QrInfo(val room_id: String, val password: String)
 
@@ -103,7 +101,6 @@ class MainActivity : ComponentActivity() {
                     MyNotificationListenerService.notificationListener = vm::addNotification
                     onDispose {
                         MyNotificationListenerService.notificationListener = null
-                        WebSocketManager.disconnect()
                     }
                 }
 
@@ -123,12 +120,13 @@ class MainActivity : ComponentActivity() {
             try {
                 val info = Gson().fromJson(contents, QrInfo::class.java)
                 val clientId = "mobile-${UUID.randomUUID()}"
-                WebSocketManager.connect(
-                    hostServidor = "10.9.8.132:5001",   // • usa 10.0.2.2 en emulador
-                    clientId     = clientId,
-                    roomId       = info.room_id,
-                    password     = info.password
-                )
+                val svc = Intent(this, com.example.prueba1.ws.WebSocketService::class.java).apply {
+                    putExtra("host", "192.168.1.49:5001")      // usa 10.0.2.2 en emulador
+                    putExtra("clientId",  clientId)
+                    putExtra("roomId",    info.room_id)
+                    putExtra("password",  info.password)
+                }
+                startForegroundService(svc)
                 Toast.makeText(
                     this,
                     "Conectando a sala...\nRoom ID: ${info.room_id}\nPassword: ${info.password}",

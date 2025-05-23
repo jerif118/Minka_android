@@ -99,5 +99,7 @@ dependencies {
     implementation ("com.squareup.okhttp3:okhttp:4.10.0")
     implementation ("com.squareup.okio:okio:3.3.0")
 
+    implementation ("androidx.work:work-runtime-ktx:2.9.0")
+
 
 }
