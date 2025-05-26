@@ -1,6 +1,8 @@
 package com.minka.app
 
+import com.minka.app.BuildConfig
 import android.Manifest
+import androidx.activity.viewModels
 import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Intent
@@ -15,19 +17,18 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.DisposableEffect
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.prueba1.ui.theme.Prueba1Theme
+import com.example.prueba1.NotificationViewModel
+import com.example.prueba1.ws.WebSocketManager
+import com.example.prueba1.ws.WebSocketService
 import com.google.gson.Gson
 import java.util.*
-import com.minka.app.NotificationViewModel
 
 data class QrInfo(val room_id: String, val password: String)
 
 class MainActivity : ComponentActivity() {
 
+    private val vm: NotificationViewModel by viewModels()
     private lateinit var qrScanner: QrScanner
     private fun isNotificationServiceEnabled(): Boolean {
         val pkgName = packageName
@@ -80,12 +81,10 @@ class MainActivity : ComponentActivity() {
         qrScanner = QrScanner(this)
         enableEdgeToEdge()
         // Configura los callbacks del WebSocketManager aquí
-        /*WebSocketManager.onNotification = { notificationData ->
-            // Esto se ejecutará cuando se reciba una notificación desde el servidor
-            runOnUiThread {
-                findViewById<NotificationViewModel>(R.id.notificationViewModel)?.addNotification(notificationData)
-            }
-        }*/
+        WebSocketManager.onNotification = { notificationData ->
+            // This will be executed when a notification is received from the server
+            vm.addNotification(notificationData)
+        }
 
         WebSocketManager.onError = { errorMessage ->
             runOnUiThread {
@@ -97,19 +96,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             Theme {
                 val nav = rememberNavController()
-                val vm: NotificationViewModel = viewModel()
+                // val vm: NotificationViewModel = viewModel() // vm is now a class member
 
                 DisposableEffect(Unit) {
                     MyNotificationListenerService.notificationListener = vm::addNotification
                     onDispose {
                         MyNotificationListenerService.notificationListener = null
-                        WebSocketManager.disconnect()
                     }
                 }
 
                 MainScreen(
                     navController = nav,
-                    vm           = vm ,
+                    vm           = vm,
                     onOpenCameraClicked  = { qrScanner.initiateQrScan() }
                 )
             }
@@ -123,12 +121,13 @@ class MainActivity : ComponentActivity() {
             try {
                 val info = Gson().fromJson(contents, QrInfo::class.java)
                 val clientId = "mobile-${UUID.randomUUID()}"
-                WebSocketManager.connect(
-                    hostServidor = "192.168.1.14:5001",   // • usa 10.0.2.2 en emulador
-                    clientId     = clientId,
-                    roomId       = info.room_id,
-                    password     = info.password
-                )
+                val svc = Intent(this, com.example.prueba1.ws.WebSocketService::class.java).apply {
+                    putExtra("host", BuildConfig.WEBSOCKET_HOST)      // usa 10.0.2.2 en emulador
+                    putExtra("clientId",  clientId)
+                    putExtra("roomId",    info.room_id)
+                    putExtra("password",  info.password)
+                }
+                startForegroundService(svc)
                 Toast.makeText(
                     this,
                     "Conectando a sala...\nRoom ID: ${info.room_id}\nPassword: ${info.password}",

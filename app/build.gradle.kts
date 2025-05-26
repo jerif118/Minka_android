@@ -19,6 +19,7 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        buildConfigField("String", "WEBSOCKET_HOST", "\"192.168.1.49:5001\"")
     }
 
     buildTypes {
@@ -98,6 +99,8 @@ dependencies {
     //websocket
     implementation ("com.squareup.okhttp3:okhttp:4.10.0")
     implementation ("com.squareup.okio:okio:3.3.0")
+
+    implementation ("androidx.work:work-runtime-ktx:2.9.0")
 
 
 }
