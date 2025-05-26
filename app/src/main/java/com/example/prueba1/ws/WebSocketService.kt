@@ -10,6 +10,12 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 // Usa el paquete donde se genera tu clase R (namespace en build.gradle)
 import com.minka.app.R
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.minka.app.dataStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -83,6 +89,16 @@ class WebSocketService : Service() {
         val clientId = prefs.getString("clientId", null) ?: return
         val roomId   = prefs.getString("roomId",   null) ?: return
         val password = prefs.getString("password", null) ?: return
+
+        // Persistir clientId en DataStore para dispositivos vinculados
+        val devicesKey = stringSetPreferencesKey("linked_devices")
+        CoroutineScope(Dispatchers.IO).launch {
+            applicationContext.dataStore.edit { settings ->
+                val current = settings[devicesKey]?.toMutableSet() ?: mutableSetOf()
+                current += clientId
+                settings[devicesKey] = current
+            }
+        }
 
         val url = "ws://$host/ws" +
                 "?action=join" +

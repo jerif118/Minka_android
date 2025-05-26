@@ -103,11 +103,10 @@ class MainActivity : ComponentActivity() {
                         MyNotificationListenerService.notificationListener = null
                     }
                 }
-
                 MainScreen(
                     navController = nav,
-                    vm           = vm ,
-                    onOpenCameraClicked  = { qrScanner.initiateQrScan() }
+                    vm = vm,
+                    onOpenCameraClicked = { qrScanner.initiateQrScan() }
                 )
             }
         }
@@ -121,7 +120,7 @@ class MainActivity : ComponentActivity() {
                 val info = Gson().fromJson(contents, QrInfo::class.java)
                 val clientId = "mobile-${UUID.randomUUID()}"
                 val svc = Intent(this, com.example.prueba1.ws.WebSocketService::class.java).apply {
-                    putExtra("host", "192.168.1.49:5001")      // usa 10.0.2.2 en emulador
+                    putExtra("host", "192.168.1.8:5001")      // usa 10.0.2.2 en emulador
                     putExtra("clientId",  clientId)
                     putExtra("roomId",    info.room_id)
                     putExtra("password",  info.password)
