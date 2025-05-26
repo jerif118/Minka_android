@@ -1,5 +1,6 @@
 [versions]
 agp = "8.9.1"
+datastorePreferencesVersion = "1.1.7"
 kotlin = "1.9.0"
 coreKtx = "1.13.1"
 junit = "4.13.2"
@@ -10,16 +11,20 @@ activityCompose = "1.9.0"
 composeBom = "2023.08.00"
 material3 = "1.1.1"
 composeMaterial3 = "1.0.0-alpha37"
+material3Version = "1.1.0"
 materialIconsExtended = "1.7.8"
 cameraCore = "1.4.2"
+navigationComposeVersion = "2.9.0"
 
 [libraries]
 androidx-compose-material3-material3 = { module = "androidx.compose.material3:material3" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "materialIconsExtended" }
 androidx-material3-adaptive-navigation-suite = { module = "androidx.compose.material3:material3-adaptive-navigation-suite" }
+androidx-material3-v110 = { module = "androidx.compose.material3:material3", version.ref = "material3Version" }
 androidx-material3-window-size-class1 = { module = "androidx.compose.material3:material3-window-size-class" }
 androidx-runtime-livedata = { module = "androidx.compose.runtime:runtime-livedata" }
+datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastorePreferencesVersion" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -36,6 +41,7 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
 androidx-compose-material3 = { group = "androidx.wear.compose", name = "compose-material3", version.ref = "composeMaterial3" }
 androidx-camera-core = { group = "androidx.camera", name = "camera-core", version.ref = "cameraCore" }
+navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationComposeVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

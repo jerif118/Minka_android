@@ -102,5 +102,10 @@ dependencies {
 
     implementation ("androidx.work:work-runtime-ktx:2.9.0")
 
+    //
+    implementation (libs.datastore.preferences)
+    implementation (libs.navigation.compose ) // o la versión que uses
+    implementation (libs.androidx.material3.v110)
+
 
 }

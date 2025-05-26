@@ -1,5 +1,8 @@
 package com.minka.app
 
+import com.minka.app.SettingsHomeScreen
+import com.minka.app.LinkedDevicesScreen
+
 import android.os.Build
 import androidx.camera.core.Camera
 import androidx.compose.foundation.background
@@ -126,7 +129,18 @@ fun MainScreen(navController: NavHostController, vm: NotificationViewModel,
                     onResumenClicked = { navController.navigate("Resumen de Ingresos") }
                 )
             }
-            composable(Dest.Settings.route) { AppSettingsScreen { navController.navigateUp() } }
+            composable(Dest.Settings.route) {
+                SettingsHomeScreen(
+                    onManageApps = { navController.navigate("manage_apps") },
+                    onLinkedDevices = { navController.navigate("linked_devices") }
+                )
+            }
+            composable("manage_apps") {
+                AppSettingsScreen(onBack = { navController.navigateUp() })
+            }
+            composable("linked_devices") {
+                LinkedDevicesScreen(onBack = { navController.navigateUp() })
+            }
             composable("Resumen de Ingresos") { ResumenDeIngresosScreen(vm) }
         }
 
