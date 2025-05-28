@@ -4,14 +4,17 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 // Usa el paquete donde se genera tu clase R (namespace en build.gradle)
 import com.minka.app.R
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.minka.app.dataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +40,17 @@ class WebSocketService : Service() {
     private val prefs by lazy {
         getSharedPreferences("ws_prefs", Context.MODE_PRIVATE)
     }
+       // Recibe la señal de “session ended” para limpiar todo
+       private val sessionEndReceiver = object : BroadcastReceiver() {
+               override fun onReceive(context: Context, intent: Intent) {
+                       if (intent.action == ACTION_SESSION_ENDED) {
+                               // 1) Borrar los prefs de conexión
+                               prefs.edit().clear().apply()
+                               // 2) Parar el servicio y el socket
+                               stopSelf()
+                           }
+                   }
+       }
 
     /** Cliente HTTP con ping y pool configurados */
     private val client by lazy {
@@ -52,6 +66,8 @@ class WebSocketService : Service() {
     /* ---------------- Service lifecycle ---------------- */
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        LocalBroadcastManager.getInstance(this)
+                   .registerReceiver(sessionEndReceiver, IntentFilter(ACTION_SESSION_ENDED))
         // Si llegan parámetros nuevos, guárdalos
         intent?.extras?.let { b ->
             prefs.edit().apply {
@@ -63,7 +79,7 @@ class WebSocketService : Service() {
         }
 
         // Arranca el servicio en primer plano (si no lo estaba)
-        startForeground(NOTIF_ID, buildNotification("Conectando…"))
+        startForeground(NOTIF_ID, buildNotification("Conectado"))
 
         // Abre (o re‑abre) el socket
         openSocket()
@@ -75,6 +91,11 @@ class WebSocketService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        // Avisar al servidor que nos vamos
+        WebSocketManager.sendLeave()
+        // Quitar receptor antes de morir
+        LocalBroadcastManager.getInstance(this)
+            .unregisterReceiver(sessionEndReceiver)
         socket?.cancel()
         socket = null
         super.onDestroy()
@@ -136,6 +157,9 @@ class WebSocketService : Service() {
     }
 
     companion object {
+        const val ACTION_WS_CONNECTED = "com.example.prueba1.ws.ACTION_WS_CONNECTED"
+        const val ACTION_WS_DISCONNECTED = "com.example.prueba1.ws.ACTION_WS_DISCONNECTED"
+        const val ACTION_SESSION_ENDED    = "com.example.prueba1.ws.ACTION_SESSION_ENDED"
         private const val NOTIF_ID = 1001
     }
 }

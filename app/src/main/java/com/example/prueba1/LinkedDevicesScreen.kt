@@ -1,6 +1,9 @@
 package com.minka.app
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -24,6 +27,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -33,6 +37,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import androidx.work.WorkManager
 import com.example.prueba1.ws.WebSocketService
 import com.minka.app.dataStore
 import kotlinx.coroutines.flow.map
@@ -47,7 +53,24 @@ fun LinkedDevicesScreen(onBack: () -> Unit) {
 
     val devices by ctx.dataStore.data.map { it[devicesK] ?: emptySet() }
         .collectAsState(initial = emptySet())
-
+    DisposableEffect(ctx) {
+        val action = WebSocketService.ACTION_SESSION_ENDED
+        val rx = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                // Al recibir sesión terminada, limpia la lista de dispositivos
+                scope.launch {
+                    ctx.dataStore.edit { prefs ->
+                        prefs[devicesK] = emptySet()
+                    }
+                }
+            }
+        }
+        LocalBroadcastManager.getInstance(ctx)
+            .registerReceiver(rx, IntentFilter(WebSocketService.ACTION_SESSION_ENDED))
+        onDispose {
+            LocalBroadcastManager.getInstance(ctx).unregisterReceiver(rx)
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -86,16 +109,25 @@ fun LinkedDevicesScreen(onBack: () -> Unit) {
                             Text(dev, Modifier.weight(1f))
                             Button(
                                 onClick = {
-                                    ctx.stopService(
-                                        Intent(ctx, WebSocketService::class.java)
-                                    )
+                                    // Desvincular manual
+                                    ctx.stopService(Intent(ctx, WebSocketService::class.java))
+                                    WorkManager.getInstance(ctx)
+                                        .cancelUniqueWork("ws_reconnect")
+                                    ctx.getSharedPreferences("ws_prefs", Context.MODE_PRIVATE)
+                                        .edit()
+                                        .remove("clientId")
+                                        .remove("roomId")
+                                        .remove("password")
+                                        .apply()
                                     scope.launch {
                                         ctx.dataStore.edit { p ->
-                                            p[devicesK] = (p[devicesK]?.minus(dev) ?: emptySet()) as Set<String>
+                                            p[devicesK] = p[devicesK]?.minus(dev) ?: emptySet()
                                         }
                                     }
                                 }
-                            ) { Text("Desvincular") }
+                            ) {
+                                Text("Desvincular")
+                            }
                         }
                     }
                 }

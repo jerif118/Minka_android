@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.google.gson.JsonParser
 import com.google.gson.Gson
 import com.minka.app.NotificationData
 import okhttp3.Response
@@ -22,6 +23,13 @@ object WebSocketManager {
     /** Referencia al WebSocket activo (la actualiza WebSocketService) */
     private var socket: WebSocket? = null
 
+    fun sendLeave(): Boolean {
+        val s = socket ?: return false
+              val payload = gson.toJson(mapOf("action" to "leave"))
+              return s.send(payload)
+    }
+
+
     var onNotification: ((NotificationData) -> Unit)? = null
     var onError: ((String) -> Unit)? = null
 
@@ -33,12 +41,37 @@ object WebSocketManager {
         }
 
         override fun onMessage(ws: WebSocket, text: String) {
-            Log.d("WS_Manager", "Received message: $text") // Log incoming message
+            Log.d("WS_Manager", "Received message: $text")
+            val jsonElem = JsonParser.parseString(text)
+            if (jsonElem.isJsonObject) {
+                val obj = jsonElem.asJsonObject
+
+                // 1) Si es un "room_created" o "joined", lo ignoramos aquí
+                if (obj.has("room_created")) {
+                    // mensaje de creación de sala → no es desconexión
+                    return
+                }
+                if (obj.has("event") && obj.get("event").asString == "joined") {
+                    // mensaje de emparejado → tampoco es desconexión
+                    return
+                }
+
+                // 2) Sólo si el info viene con la palabra "desconect" (o la clave que uses en tu servidor)
+                if (obj.has("info") && obj.get("info").asString.contains("desconect", ignoreCase = true)) {
+                    val info = obj.get("info").asString
+                    onError?.invoke(info)
+                    LocalBroadcastManager.getInstance(ctx)
+                        .sendBroadcast(Intent(WebSocketService.ACTION_SESSION_ENDED))
+                    return
+                }
+            }
+
+            // 3) Por fin los datos de notificación “reales”
             try {
                 val data = gson.fromJson(text, NotificationData::class.java)
                 onNotification?.invoke(data)
             } catch (e: Exception) {
-                Log.e("WS_Manager", "JSON parsing error: ${e.message} for message: $text", e) // Log error and raw message
+                Log.e("WS_Manager", "JSON parsing error: ${e.message} for message: $text", e)
                 onError?.invoke("JSON inválido: ${e.message}")
             }
         }

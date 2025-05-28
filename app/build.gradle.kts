@@ -19,7 +19,7 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-        buildConfigField("String", "WEBSOCKET_HOST", "\"192.168.1.49:5001\"")
+        //buildConfigField("String", "WEBSOCKET_HOST", "\"192.168.1.8:5001\"")
     }
 
     buildTypes {

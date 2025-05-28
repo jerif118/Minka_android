@@ -26,15 +26,16 @@ class ReconnectWorker(
     }
 
     companion object {
-        /**
-         * Encola (o re‑emplaza) un intento único de reconexión con back‑off
-         * exponencial.  Se usa desde [WebSocketManager.listener].
-         */
         fun enqueue(ctx: Context) {
+            val prefs = ctx.getSharedPreferences("ws_prefs", Context.MODE_PRIVATE)
+            if (prefs.getString("clientId", null).isNullOrEmpty()) {
+                // No hay cliente vinculado, no enfilemos nada
+                return
+            }
             val req = OneTimeWorkRequestBuilder<ReconnectWorker>()
                 .setBackoffCriteria(
                     BackoffPolicy.EXPONENTIAL,
-                    30, TimeUnit.SECONDS       // primer intento tras 30 s
+                    30, TimeUnit.SECONDS
                 )
                 .build()
 
