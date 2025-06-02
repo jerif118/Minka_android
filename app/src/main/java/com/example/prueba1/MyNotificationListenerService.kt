@@ -90,7 +90,7 @@ class MyNotificationListenerService : NotificationListenerService() {
     /* ──────────────────  Captura de notificaciones en tiempo real ───────── */
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         // 1) Ignorar si no es de una app "habilitada"
-        if (!allowedPackages.contains(sbn.packageName)) return
+        //if (!allowedPackages.contains(sbn.packageName)) return
 
         // 2) Extraer título y texto tal cual
         val extras = sbn.notification.extras

@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.IBinder
+import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 // Usa el paquete donde se genera tu clase R (namespace en build.gradle)
 import com.minka.app.R
@@ -22,6 +24,15 @@ import kotlinx.coroutines.launch
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import com.google.gson.Gson
+import com.minka.app.NotificationData
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody
+import okhttp3.Response
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -40,6 +51,21 @@ class WebSocketService : Service() {
     private val prefs by lazy {
         getSharedPreferences("ws_prefs", Context.MODE_PRIVATE)
     }
+
+    companion object {
+        const val ACTION_WS_CONNECTED = "com.example.prueba1.ws.ACTION_WS_CONNECTED"
+        const val ACTION_WS_DISCONNECTED = "com.example.prueba1.ws.ACTION_WS_DISCONNECTED"
+        const val ACTION_SESSION_ENDED    = "com.example.prueba1.ws.ACTION_SESSION_ENDED"
+        private const val NOTIF_ID = 1001
+        const val KEY_SHOULD_RECONNECT = "shouldReconnect"
+    }
+
+    private fun scheduleReconnectIfNeeded() {
+        val shouldReconnect = prefs.getBoolean(KEY_SHOULD_RECONNECT, false)
+        if (shouldReconnect) {
+            ReconnectWorker.enqueue(applicationContext)
+        }
+    }
        // Recibe la señal de “session ended” para limpiar todo
        private val sessionEndReceiver = object : BroadcastReceiver() {
                override fun onReceive(context: Context, intent: Intent) {
@@ -52,6 +78,23 @@ class WebSocketService : Service() {
                    }
        }
 
+       // Recibe la señal de entrada a Doze mode para notificar al servidor
+       private val dozeReceiver = object : BroadcastReceiver() {
+           override fun onReceive(context: Context, intent: Intent) {
+               val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+               if (pm.isDeviceIdleMode) {
+                   Log.i("WebSocketService", "Entrando en Doze mode – notificando al servidor")
+                   // Notificar por WebSocket
+                   WebSocketManager.sendLeave("doze")
+                   // Fallback: enviar mensaje por API REST
+                   sendViaApi(NotificationData(info = "DozeMode")) // usa el constructor adecuado
+                   // Cerrar socket local
+                   socket?.close(1000, "Entering Doze")
+                   socket = null
+               }
+           }
+       }
+
     /** Cliente HTTP con ping y pool configurados */
     private val client by lazy {
         OkHttpClient.Builder()
@@ -61,6 +104,34 @@ class WebSocketService : Service() {
             .build()
     }
 
+    // Cliente HTTP para fallback API
+    private val apiClient by lazy { OkHttpClient() }
+
+    /** Envía el mensaje vía REST API cuando el socket no está disponible (Doze fallback) */
+    private fun sendViaApi(notification: NotificationData) {
+        val payloadMap = mapOf(
+            "client_id" to prefs.getString("clientId", "")!!,
+            "room_id"   to prefs.getString("roomId",   "")!!,
+            "message"   to notification
+        )
+        val json = Gson().toJson(payloadMap)
+        val body = RequestBody.create(
+            "application/json; charset=utf-8".toMediaTypeOrNull(),
+            json
+        )
+        val url = "https://${prefs.getString("host", "")}/api/rooms/message"
+        val request = Request.Builder().url(url).post(body).build()
+        apiClient.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.w("WebSocketService", "Fallback API failed: ${e.message}")
+            }
+            override fun onResponse(call: Call, response: Response) {
+                Log.i("WebSocketService", "Fallback API success: ${response.code}")
+                response.close()
+            }
+        })
+    }
+
     private var socket: okhttp3.WebSocket? = null
 
     /* ---------------- Service lifecycle ---------------- */
@@ -68,6 +139,8 @@ class WebSocketService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         LocalBroadcastManager.getInstance(this)
                    .registerReceiver(sessionEndReceiver, IntentFilter(ACTION_SESSION_ENDED))
+        // Registrar receptor de Doze
+        registerReceiver(dozeReceiver, IntentFilter(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED))
         // Si llegan parámetros nuevos, guárdalos
         intent?.extras?.let { b ->
             prefs.edit().apply {
@@ -77,6 +150,9 @@ class WebSocketService : Service() {
                 putString("password", b.getString("password"))
             }.apply()
         }
+
+        // Marcar que sí permitimos reconectar en caso de fallo
+        prefs.edit().putBoolean(KEY_SHOULD_RECONNECT, true).apply()
 
         // Arranca el servicio en primer plano (si no lo estaba)
         startForeground(NOTIF_ID, buildNotification("Conectado"))
@@ -90,10 +166,21 @@ class WebSocketService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onTaskRemoved(rootIntent: Intent) {
+        // Desconexión voluntaria por "swipe": no reconectar
+        prefs.edit().putBoolean(KEY_SHOULD_RECONNECT, false).apply()
+        WebSocketManager.sendLeave("tarea_removida")
+        socket?.close(1000, "Tarea removida")
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
+        // Indicar que no queremos reconectar tras cierre voluntario
+        prefs.edit().putBoolean(KEY_SHOULD_RECONNECT, false).apply()
         // Avisar al servidor que nos vamos
         WebSocketManager.sendLeave()
-        // Quitar receptor antes de morir
+        WebSocketManager.updateSocket(null)
+        unregisterReceiver(dozeReceiver)
         LocalBroadcastManager.getInstance(this)
             .unregisterReceiver(sessionEndReceiver)
         socket?.cancel()
@@ -130,6 +217,7 @@ class WebSocketService : Service() {
         val req = Request.Builder().url(url).build()
 
         socket = client.newWebSocket(req, WebSocketManager.listener(this))
+        WebSocketManager.updateSocket(socket)
     }
 
     /* ---------------- Notificación de servicio ---------------- */
@@ -156,10 +244,4 @@ class WebSocketService : Service() {
             .build()
     }
 
-    companion object {
-        const val ACTION_WS_CONNECTED = "com.example.prueba1.ws.ACTION_WS_CONNECTED"
-        const val ACTION_WS_DISCONNECTED = "com.example.prueba1.ws.ACTION_WS_DISCONNECTED"
-        const val ACTION_SESSION_ENDED    = "com.example.prueba1.ws.ACTION_SESSION_ENDED"
-        private const val NOTIF_ID = 1001
-    }
 }

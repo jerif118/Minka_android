@@ -2,6 +2,8 @@ package com.example.prueba1.ws
 
 import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
+import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -20,6 +22,11 @@ class ReconnectWorker(
 ) : Worker(ctx, params) {
 
     override fun doWork(): Result {
+        val pm = applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (pm.isDeviceIdleMode) {
+            Log.i("ReconnectWorker", "Device still in Doze mode; retrying later")
+            return Result.retry()
+        }
         val svc = Intent(applicationContext, WebSocketService::class.java)
         applicationContext.startForegroundService(svc)
         return Result.success()

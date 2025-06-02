@@ -5,8 +5,10 @@ import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
@@ -75,6 +77,16 @@ class MainActivity : ComponentActivity() {
                 .setNegativeButton("Cancelar", null)
                 .show()
         }
+
+        // 2) Solicitar exclusión de optimizaciones de batería (opcional)
+        val pm = getSystemService(PowerManager::class.java)
+        if (pm != null && !pm.isIgnoringBatteryOptimizations(packageName)) {
+            val intentOpt = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            startActivity(intentOpt)
+        }
+
         qrScanner = QrScanner(this)
         enableEdgeToEdge()
         // Configura los callbacks del WebSocketManager aquí

@@ -23,12 +23,43 @@ object WebSocketManager {
     /** Referencia al WebSocket activo (la actualiza WebSocketService) */
     private var socket: WebSocket? = null
 
-    fun sendLeave(): Boolean {
-        val s = socket ?: return false
-              val payload = gson.toJson(mapOf("action" to "leave"))
-              return s.send(payload)
+    /**
+     * Callback invoked when WebSocket is unavailable and a fallback (e.g., REST API) should be used.
+     * The service should assign this to send via HTTP when in Doze mode.
+     */
+    private var onFallback: ((NotificationData) -> Unit)? = null
+
+    /**
+     * Envía al servidor la acción "leave" con un motivo opcional.
+     * @param reason Texto que explica por qué se desconecta (ej. "doze").
+     */
+    fun sendLeave(reason: String = ""): Boolean {
+        val s = socket ?: run {
+            Log.w("WS_Manager", "sendLeave llamado pero socket es null")
+            return false
+        }
+        // Construir el payload con motivo si se proporcionó
+        val payloadMap = mutableMapOf<String, Any>("action" to "leave")
+        if (reason.isNotBlank()) {
+            payloadMap["reason"] = reason
+        }
+        val payload = gson.toJson(payloadMap)
+        Log.d("WS_Manager", "Enviando leave payload: $payload")
+        return s.send(payload)
     }
 
+    private const val PREFS_NAME = "ws_prefs"
+    private const val KEY_SHOULD_RECONNECT = "should_reconnect"
+
+    private fun setShouldReconnect(ctx: Context, value: Boolean) {
+        val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_SHOULD_RECONNECT, value).apply()
+    }
+
+    private fun shouldReconnect(ctx: Context): Boolean {
+        val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_SHOULD_RECONNECT, true)
+    }
 
     var onNotification: ((NotificationData) -> Unit)? = null
     var onError: ((String) -> Unit)? = null
@@ -38,6 +69,7 @@ object WebSocketManager {
         override fun onOpen(ws: WebSocket, resp: Response) {
             Log.i("WS", "Conectado: $resp")
             LocalBroadcastManager.getInstance(ctx).sendBroadcast(Intent(WebSocketService.ACTION_WS_CONNECTED))
+            setShouldReconnect(ctx, true)
         }
 
         override fun onMessage(ws: WebSocket, text: String) {
@@ -59,6 +91,7 @@ object WebSocketManager {
                 // 2) Sólo si el info viene con la palabra "desconect" (o la clave que uses en tu servidor)
                 if (obj.has("info") && obj.get("info").asString.contains("desconect", ignoreCase = true)) {
                     val info = obj.get("info").asString
+                    setShouldReconnect(ctx, false)
                     onError?.invoke(info)
                     LocalBroadcastManager.getInstance(ctx)
                         .sendBroadcast(Intent(WebSocketService.ACTION_SESSION_ENDED))
@@ -79,14 +112,18 @@ object WebSocketManager {
         override fun onClosed(ws: WebSocket, code: Int, reason: String) {
             Log.i("WS", "Cerrado: $code / $reason")
             LocalBroadcastManager.getInstance(ctx).sendBroadcast(Intent(WebSocketService.ACTION_WS_DISCONNECTED))
-            ReconnectWorker.enqueue(ctx)
+            if (shouldReconnect(ctx)) {
+                ReconnectWorker.enqueue(ctx)
+            }
         }
 
         override fun onFailure(ws: WebSocket, t: Throwable, resp: Response?) {
             Log.w("WS", "Fallo WS: ${t.localizedMessage}")
             onError?.invoke(t.localizedMessage ?: "Error de conexión")
             LocalBroadcastManager.getInstance(ctx).sendBroadcast(Intent(WebSocketService.ACTION_WS_DISCONNECTED))
-            ReconnectWorker.enqueue(ctx)
+            if (shouldReconnect(ctx)) {
+                ReconnectWorker.enqueue(ctx)
+            }
         }
     }
 
@@ -108,11 +145,14 @@ object WebSocketManager {
      */
     fun sendNotification(notification: NotificationData): Boolean {
         val s = socket ?: run {
-            Log.w("WS_Manager", "sendNotification called but socket is null. Message not sent.")
+            Log.w("WS_Manager", "WebSocket is null, invoking fallback for notification")
+            onFallback?.invoke(notification)
             return false
         }
         val jsonPayload = gson.toJson(mapOf("message" to notification))
-        Log.d("WS_Manager", "Sending JSON: $jsonPayload") // Log the outgoing JSON
-        return s.send(jsonPayload)
+        Log.d("WS_Manager", "–> Invocando a sendNotification con payload: $jsonPayload")
+        val sent = s.send(jsonPayload)
+        Log.d("WS_Manager", "   …s.send() devolvió: $sent")
+        return sent
     }
 }
