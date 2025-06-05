@@ -30,6 +30,19 @@ object WebSocketManager {
     private var onFallback: ((NotificationData) -> Unit)? = null
 
     /**
+     * Registra (o elimina) la rutina que se usará cuando el WebSocket no esté
+     * disponible (p.ej. Doze).  Pasa `null` para desactivar.
+     */
+    fun setFallback(cb: ((NotificationData) -> Unit)?) {
+        onFallback = cb
+    }
+
+    /** Limpia la rutina alternativa, volviendo a modo WebSocket puro. */
+    fun clearFallback() {
+        onFallback = null
+    }
+
+    /**
      * Envía al servidor la acción "leave" con un motivo opcional.
      * @param reason Texto que explica por qué se desconecta (ej. "doze").
      */
@@ -143,7 +156,7 @@ object WebSocketManager {
      * Envía una notificación al servidor.  Devuelve true si se pudo
      * enviar, false si no hay conexión.
      */
-    fun sendNotification(notification: NotificationData): Boolean {
+    /*fun sendNotification(notification: NotificationData): Boolean {
         val s = socket ?: run {
             Log.w("WS_Manager", "WebSocket is null, invoking fallback for notification")
             onFallback?.invoke(notification)
@@ -154,5 +167,30 @@ object WebSocketManager {
         val sent = s.send(jsonPayload)
         Log.d("WS_Manager", "   …s.send() devolvió: $sent")
         return sent
+
+
+    }*/
+    fun sendNotification(notification: NotificationData): Boolean {
+        // 1) Si no hay socket, usa el fallback REST
+        val s = socket ?: run {
+            Log.w("WS_Manager", "WebSocket is null; enviando por REST")
+            onFallback?.invoke(notification)
+            return false
+        }
+
+        // 2) Intentar enviar por WebSocket
+        val jsonPayload = gson.toJson(mapOf("message" to notification))
+        Log.d("WS_Manager", "--> sendNotification payload: $jsonPayload")
+        val sent = s.send(jsonPayload)
+        Log.d("WS_Manager", "   …s.send() devolvió: $sent")
+
+        // 3) Si falla (devuelve false), usa inmediatamente el fallback REST
+        if (!sent) {
+            Log.w("WS_Manager", "WebSocket send falló; enviando por REST")
+            onFallback?.invoke(notification)
+        }
+
+        return sent
     }
+
 }

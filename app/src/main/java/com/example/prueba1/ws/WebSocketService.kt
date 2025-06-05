@@ -8,6 +8,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
@@ -86,11 +87,17 @@ class WebSocketService : Service() {
                    Log.i("WebSocketService", "Entrando en Doze mode – notificando al servidor")
                    // Notificar por WebSocket
                    WebSocketManager.sendLeave("doze")
+                   // Todas las notificaciones se enviarán por REST mientras no haya WebSocket
+                   WebSocketManager.setFallback { notif -> sendViaApi(notif) }
                    // Fallback: enviar mensaje por API REST
                    sendViaApi(NotificationData(info = "DozeMode")) // usa el constructor adecuado
                    // Cerrar socket local
                    socket?.close(1000, "Entering Doze")
                    socket = null
+               }else{
+                   Log.i("WebSocketService", "Saliendo de Doze mode – reconectando")
+                   WebSocketManager.clearFallback()
+                   openSocket() // <--volver a conectar saliendo del estado doze
                }
            }
        }
@@ -155,10 +162,17 @@ class WebSocketService : Service() {
         prefs.edit().putBoolean(KEY_SHOULD_RECONNECT, true).apply()
 
         // Arranca el servicio en primer plano (si no lo estaba)
-        startForeground(NOTIF_ID, buildNotification("Conectado"))
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            startForeground(
+                NOTIF_ID,
+                buildNotification("Conectado"),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        } else {
+            startForeground(NOTIF_ID, buildNotification("Conectado"))
+        }
 
-        // Abre (o re‑abre) el socket
-        openSocket()
+        openSocket()     // fallback se activará sólo cuando entremos en Doze
 
         // START_STICKY → el sistema intentará recrearlo si lo mata
         return START_STICKY

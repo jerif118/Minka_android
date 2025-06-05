@@ -29,6 +29,9 @@ data class QrInfo(val room_id: String, val password: String)
 class MainActivity : ComponentActivity() {
 
     private lateinit var qrScanner: QrScanner
+    companion object {
+        private const val REQ_DATA_SYNC = 2002   // request‑code para permiso Data‑Sync (API 34+)
+    }
     private fun isNotificationServiceEnabled(): Boolean {
         val pkgName = packageName
         val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
@@ -47,6 +50,19 @@ class MainActivity : ComponentActivity() {
             PackageManager.DONT_KILL_APP
         )
     }
+    private fun requestDataSyncPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 34 &&
+            checkSelfPermission(
+                Manifest.permission.FOREGROUND_SERVICE_DATA_SYNC
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(
+                arrayOf(Manifest.permission.FOREGROUND_SERVICE_DATA_SYNC),
+                REQ_DATA_SYNC
+            )
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -62,6 +78,8 @@ class MainActivity : ComponentActivity() {
                 1001                                  // request‑code arbitrario
             )
         }
+        // Permiso especial Android 14+ para FGS tipo dataSync
+        requestDataSyncPermissionIfNeeded()
 
         /* ─────────────────────────────────────────────────────────────────────── */
         if (isNotificationServiceEnabled()) {
@@ -132,7 +150,7 @@ class MainActivity : ComponentActivity() {
                 val info = Gson().fromJson(contents, QrInfo::class.java)
                 val clientId = "mobile-${UUID.randomUUID()}"
                 val svc = Intent(this, com.example.prueba1.ws.WebSocketService::class.java).apply {
-                    putExtra("host", "192.168.1.8:5001")      // usa 10.0.2.2 en emulador
+                    putExtra("host", "192.168.1.11:5001")      // usa 10.0.2.2 en emulador
                     putExtra("clientId",  clientId)
                     putExtra("roomId",    info.room_id)
                     putExtra("password",  info.password)
