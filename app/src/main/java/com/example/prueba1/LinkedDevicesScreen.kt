@@ -18,14 +18,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -72,41 +76,63 @@ fun LinkedDevicesScreen(onBack: () -> Unit) {
         }
     }
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = { Text("Dispositivos vinculados") },
+            CenterAlignedTopAppBar(
+                title = { Text("Dispositivos vinculados", style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Atrás")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         }
     ) { pad ->
         if (devices.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(pad),
+                contentAlignment = Alignment.Center
+            ) {
                 Text("No hay dispositivos vinculados")
             }
         } else {
             LazyColumn(
                 Modifier
-                .padding(pad)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(pad)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(devices.toList()) { dev ->
-                    Card(Modifier.fillMaxWidth()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        shape = MaterialTheme.shapes.medium,
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
                         Row(
-                            Modifier.padding(16.dp),
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PhoneAndroid,
                                 contentDescription = "Device",
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.primary
                             )
                             Spacer(Modifier.width(12.dp))
-                            Text(dev, Modifier.weight(1f))
+                            Text(dev, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                            Spacer(Modifier.width(12.dp))
                             Button(
                                 onClick = {
                                     // Desvincular manual
@@ -130,6 +156,7 @@ fun LinkedDevicesScreen(onBack: () -> Unit) {
                             }
                         }
                     }
+                    Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
                 }
             }
         }

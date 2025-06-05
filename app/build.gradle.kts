@@ -60,7 +60,6 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
     implementation("io.coil-kt:coil-compose:1.3.2")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
@@ -71,22 +70,6 @@ dependencies {
     implementation("com.google.android.gms:play-services-ads:23.1.0")
     implementation("com.google.firebase:firebase-ads:21.5.0")
     implementation ("com.journeyapps:zxing-android-embedded:4.3.0")
-    //Material 3
-    implementation (libs.material3)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.camera.core)
-    val composeBom = platform("androidx.compose:compose-bom:2025.02.00")
-    implementation(composeBom)
-    testImplementation(composeBom)
-    androidTestImplementation(composeBom)
-    // Abril-25
-    implementation (libs.androidx.compose.material3.material3)          // 1.3.2 estable
-    implementation (libs.androidx.material3.window.size.class1)
-    implementation (libs.androidx.material3.adaptive.navigation.suite)
-    implementation (libs.androidx.runtime.livedata)
-    //icons
-    implementation (libs.androidx.material.icons.extended)
-    //implementation ("androidx.compose.material3:material3:1.0.0-alpha01")
     // Eliminado com.android.support:support-v4
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -97,15 +80,46 @@ dependencies {
     //cam
 
     //websocket
-    implementation ("com.squareup.okhttp3:okhttp:4.10.0")
-    implementation ("com.squareup.okio:okio:3.3.0")
+    implementation ("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation ("com.squareup.okio:okio:3.8.0")
 
-    implementation ("androidx.work:work-runtime-ktx:2.9.0")
+    implementation ("androidx.work:work-runtime-ktx:2.10.1")
 
     //
     implementation (libs.datastore.preferences)
     implementation (libs.navigation.compose ) // o la versión que uses
-    implementation (libs.androidx.material3.v110)
 
 
+    // Compose BOM for alignment (mayo 2025)
+    val composeBom = platform("androidx.compose:compose-bom:2025.05.00")
+    implementation(composeBom)
+    androidTestImplementation(composeBom)
+
+    // Material 3
+    implementation("androidx.compose.material3:material3")
+
+    // Foundation and core UI
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.ui:ui")
+
+    // Material icons (optional)
+    implementation("androidx.compose.material:material-icons-core")
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // Adaptive layout (optional)
+    implementation("androidx.compose.material3.adaptive:adaptive")
+
+    // Activity and lifecycle integration (optional)
+    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.5")
+    implementation("androidx.compose.runtime:runtime-livedata")
+    implementation("androidx.compose.runtime:runtime-rxjava2")
+
+    // UI tooling (Preview support)
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // UI Tests
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

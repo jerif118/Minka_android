@@ -23,6 +23,7 @@ import com.example.prueba1.ws.WebSocketManager
 import com.example.prueba1.ws.WebSocketService
 import com.google.gson.Gson
 import java.util.*
+import com.example.prueba1.ui.theme.Prueba1Theme
 
 data class QrInfo(val room_id: String, val password: String)
 
@@ -123,7 +124,7 @@ class MainActivity : ComponentActivity() {
 
 
         setContent {
-            Theme {
+            Prueba1Theme {
                 val nav = rememberNavController()
                 val vm: NotificationViewModel = viewModel()
 

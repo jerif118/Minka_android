@@ -5,10 +5,10 @@ import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.provider.Settings
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,6 +28,27 @@ import com.minka.app.dataStore
 import com.minka.app.toBitmap
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 
 // acceso al DataStore
 //private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -63,19 +84,24 @@ fun AppSettingsScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = { Text("Gestionar Aplicaciones") },
+            CenterAlignedTopAppBar(
+                title = { Text("Gestionar Aplicaciones", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         }
     ) { padding ->
         Column(
             modifier = Modifier
+                .background(MaterialTheme.colorScheme.background)
                 .padding(padding)
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
@@ -90,71 +116,93 @@ fun AppSettingsScreen(onBack: () -> Unit) {
                     )?.contains(component.flattenToString()) == true
                 )
             }
-            Row(
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                shape = MaterialTheme.shapes.extraLarge,
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
-                Text("Escucha activa", modifier = Modifier.weight(1f))
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = { checked ->
-                        enabled = checked
-                        val state = if (checked)
-                            PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                        else
-                            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-                        pkgManager.setComponentEnabledSetting(
-                            component,
-                            state,
-                            PackageManager.DONT_KILL_APP
-                        )
-                    }
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(installedApps) { appInfo ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.Start,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val iconDrawable = pm.getApplicationIcon(appInfo)
-                        val iconBitmap = iconDrawable.toBitmap().asImageBitmap()
-                        Image(
-                            bitmap = iconBitmap,
-                            contentDescription = pm.getApplicationLabel(appInfo).toString(),
-                            modifier = Modifier.size(40.dp)
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text(pm.getApplicationLabel(appInfo).toString())
-                        Spacer(modifier = Modifier.weight(1f))
+                ListItem(
+                    headlineContent = { Text("Escucha activa", style = MaterialTheme.typography.bodyLarge) },
+                    trailingContent = {
                         Switch(
-                            checked = selected.contains(appInfo.packageName),
+                            checked = enabled,
                             onCheckedChange = { checked ->
-                                // actualizamos la lista local y el servicio
-                                val updated = selected.toMutableSet().apply {
-                                    if (checked) add(appInfo.packageName)
-                                    else remove(appInfo.packageName)
-                                }
-                                if (checked)  MyNotificationListenerService.allowedPackages.add(appInfo.packageName)
-                                else          MyNotificationListenerService.allowedPackages.remove(appInfo.packageName)
-
-                                // guardamos en DataStore
-                                scope.launch {
-                                    context.dataStore.edit { prefs ->
-                                        prefs[stringSetPreferencesKey("selected_apps")] = updated
-                                    }
-                                }
+                                enabled = checked
+                                val state = if (checked)
+                                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                                else
+                                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                                pm.setComponentEnabledSetting(
+                                    component,
+                                    state,
+                                    PackageManager.DONT_KILL_APP
+                                )
                             }
                         )
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(installedApps) { appInfo ->
+                    val iconDrawable = pm.getApplicationIcon(appInfo)
+                    val iconBitmap = iconDrawable.toBitmap().asImageBitmap()
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        shape = MaterialTheme.shapes.medium,
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                        onClick = { /* no click action for now */ }
+                    ) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Image(
+                                bitmap = iconBitmap,
+                                contentDescription = pm.getApplicationLabel(appInfo).toString(),
+                                modifier = Modifier.size(40.dp)
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(
+                                pm.getApplicationLabel(appInfo).toString(),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Switch(
+                                checked = selected.contains(appInfo.packageName),
+                                onCheckedChange = { checked ->
+                                    val updated = selected.toMutableSet().apply {
+                                        if (checked) add(appInfo.packageName)
+                                        else remove(appInfo.packageName)
+                                    }
+                                    if (checked) MyNotificationListenerService.allowedPackages.add(appInfo.packageName)
+                                    else MyNotificationListenerService.allowedPackages.remove(appInfo.packageName)
+
+                                    scope.launch {
+                                        context.dataStore.edit { prefs ->
+                                            prefs[stringSetPreferencesKey("selected_apps")] = updated
+                                        }
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }

@@ -8,7 +8,7 @@ class QrScanner(private val activity: ComponentActivity) {
         IntentIntegrator(activity)
             .setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
             .setBeepEnabled(true)
-            .setOrientationLocked(false)
+            .setOrientationLocked(true)
             .initiateScan()
     }
 
