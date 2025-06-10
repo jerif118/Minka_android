@@ -54,6 +54,12 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.*
+import kotlinx.coroutines.launch
+
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.lerp
 
 
 sealed class Dest(val route: String, val icon: ImageVector, val label: String) {
@@ -82,12 +88,32 @@ fun MainScreen(
                 topBar = {
                     CenterAlignedTopAppBar(
                         title = {
-                            Text(
-                                "Chekealo.ya - User (Daniel sanchez)",
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium),
-                                // Usa el color del tema para el texto sobre el fondo
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            // Usamos una Columna para apilar los textos verticalmente
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                // Texto principal
+                                Text(
+                                    text = "Chekealo.ya",
+                                    // Un tamaño de letra un poco más pequeño que el original, pero aún prominente
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                // Subtítulo con el nombre del usuario
+                                Text(
+                                    text = "User (Daniel sanchez)",
+                                    // Un tamaño de letra más pequeño para el subtítulo
+                                    style = MaterialTheme.typography.bodySmall,
+                                    // Un color ligeramente más atenuado para dar jerarquía
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = onOpenCameraClicked) {
+                                Icon(
+                                    imageVector = Icons.Default.QrCode,
+                                    contentDescription = "Escanear QR" // Descripción más accesible
+                                )
+                            }
                         },
                         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                             // El color del TopAppBar será el del fondo para un look integrado
@@ -150,7 +176,11 @@ fun MainScreen(
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 } else {
-                    val apps = remember(vm.notifications) {
+                    //val apps = remember(vm.notifications) {
+                    //    vm.notifications.map { it.appName to it.packageName }.distinct()
+                    //}
+                    val apps = remember(vm.notifications.size) {
+                        // El bloque interno no cambia
                         vm.notifications.map { it.appName to it.packageName }.distinct()
                     }
                     // Botón de filtro y sus iconos (izquierda)
@@ -228,23 +258,6 @@ fun MainScreen(
                             )
                         }
                     }
-
-                    // Botón QR (derecha, estático)
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 24.dp, bottom = 110.dp)
-                    ) {
-                        FloatingActionButton(
-                            onClick = onOpenCameraClicked,
-                            // MODIFICADO: Colores del tema para el FAB terciario
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.size(56.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.QrCode, contentDescription = "QR")
-                        }
-                    }
                 }
             }
         }
@@ -304,6 +317,31 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
 
     val focusRequester = remember { FocusRequester() }
 
+    val coroutineScope = rememberCoroutineScope()
+    val blinkColor = MaterialTheme.colorScheme.primary
+    val blinkProgress = remember { Animatable(0f) }
+    val animatedBorderColor = lerp(start = Color.Transparent, stop = blinkColor, fraction = blinkProgress.value)
+
+    val messageAtLastBlink = remember { mutableStateOf(n.message) }
+
+    LaunchedEffect(n.message) {
+        // La animación se ejecuta si el mensaje de la notificación es diferente
+        // al último mensaje que recordamos haber animado.
+        if (messageAtLastBlink.value != n.message) {
+
+            // MODIFICACIÓN CLAVE: Hemos quitado la condición que comprobaba si el mensaje
+            // era nulo o no. Ahora, cualquier cambio (agregar, editar, O ELIMINAR)
+            // activará la animación.
+            coroutineScope.launch {
+                blinkProgress.animateTo(1f, animationSpec = tween(250))
+                blinkProgress.animateTo(0f, animationSpec = tween(durationMillis = 1000, delayMillis = 400))
+            }
+
+            // CRÍTICO: Actualizamos nuestra memoria con el mensaje actual.
+            messageAtLastBlink.value = n.message
+        }
+    }
+
     LaunchedEffect(isEditing) {
         if (isEditing) {
             delay(100)
@@ -328,243 +366,260 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
     val backgroundColor = when {
         isEditing -> editingBackgroundColor
         isNew -> newNotificationBackgroundColor
-        editedMessage.isNotBlank() -> noteBackgroundColor
+        n.message?.isNotBlank() == true -> noteBackgroundColor // Usamos n.message como fuente de verdad
         else -> defaultBackgroundColor
     }
 
     val primaryTextColor = MaterialTheme.colorScheme.primary
     val secondaryTextColor = MaterialTheme.colorScheme.secondary
 
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .background(backgroundColor) // El fondo ahora es dinámico
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .animateContentSize(animationSpec = tween(durationMillis = 300)),
-        verticalAlignment = Alignment.Top
+            .border( // El borde ahora está en el Box exterior
+                width = 2.dp,
+                color = animatedBorderColor,
+                shape = MaterialTheme.shapes.medium
+            )
     ) {
-        val context = LocalContext.current
-        val pm = context.packageManager
-        val iconDrawable = try { pm.getApplicationIcon(n.packageName) } catch (_: Exception) { null }
-        val iconBitmap = iconDrawable?.toBitmap()?.asImageBitmap()
-
-        Box(
-            modifier = Modifier.padding(top = 8.dp, end = 12.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
+                .background(backgroundColor) // El fondo se queda en el Row interior
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .animateContentSize(animationSpec = tween(durationMillis = 300)),
+            verticalAlignment = Alignment.Top
         ) {
-            if (iconBitmap != null) {
-                Image(
-                    bitmap = iconBitmap,
-                    contentDescription = n.appName,
-                    modifier = Modifier.size(48.dp)
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Build,
-                    contentDescription = n.appName,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.outline // Un color neutral del tema
-                )
+            val context = LocalContext.current
+            val pm = context.packageManager
+            val iconDrawable = try {
+                pm.getApplicationIcon(n.packageName)
+            } catch (_: Exception) {
+                null
             }
+            val iconBitmap = iconDrawable?.toBitmap()?.asImageBitmap()
 
-            if (isNew) {
-                Text(
-                    text = "NUEVA",
-                    // Color de texto que contrasta con el fondo del badge
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .offset(y = (-8).dp)
-                        .background(
-                            // Color de fondo del badge del tema
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-        }
-
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier.padding(top = 8.dp, end = 12.dp)
             ) {
-                Text(
-                    n.appName,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    // Usa el color correspondiente al fondo de la tarjeta
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                IconButton(onClick = {
-                    if (isEditing) {
-                        if (editedMessage.trim().isEmpty()) {
-                            showConfirmEmptyNoteDialog = true
-                        } else {
-                            vm.updateNotificationMessage(n.id, editedMessage.trim())
-                            isEditing = false
-                        }
-                    } else {
-                        isEditing = true
-                    }
-                }) {
+                if (iconBitmap != null) {
+                    Image(
+                        bitmap = iconBitmap,
+                        contentDescription = n.appName,
+                        modifier = Modifier.size(48.dp)
+                    )
+                } else {
                     Icon(
-                        imageVector = when {
-                            isEditing -> Icons.Default.Check
-                            editedMessage.isNotBlank() -> Icons.Default.Note
-                            else -> Icons.Default.Edit
-                        },
-                        contentDescription = if (isEditing) "Guardar nota" else "Editar nota",
-                        // Usa un color primario del tema para el icono
-                        tint = primaryTextColor
+                        imageVector = Icons.Default.Build,
+                        contentDescription = n.appName,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.outline // Un color neutral del tema
+                    )
+                }
+
+                if (isNew) {
+                    Text(
+                        text = "NUEVA",
+                        // Color de texto que contrasta con el fondo del badge
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .offset(y = (-8).dp)
+                            .background(
+                                // Color de fondo del badge del tema
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
             }
 
-            Spacer(Modifier.height(2.dp))
-
-            Text(
-                "De: ${n.senderName}",
-                style = MaterialTheme.typography.bodyMedium,
-                // Un color de texto secundario para menor énfasis
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Text(
-                    "S/ %.2f".format(n.amount),
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                    // Usa el color primario del tema
-                    color = primaryTextColor
-                )
-                Text(
-                    "HORA: $hora",
-                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
-                    // Usa el color secundario del tema
-                    color = secondaryTextColor
-                )
-            }
-
-            Spacer(Modifier.height(6.dp))
-
-            if (isEditing) {
-                OutlinedTextField(
-                    value = editedMessage,
-                    onValueChange = { editedMessage = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 0.dp)
-                        .focusRequester(focusRequester),
-                    label = { Text("Escribe tu nota") },
-                    maxLines = 4,
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                    // Colores del TextField que se adaptan al tema
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                        cursorColor = MaterialTheme.colorScheme.primary,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-            } else if (editedMessage.isNotBlank()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showFullMessage = !showFullMessage }
-                        .padding(vertical = 2.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (showFullMessage) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Nota:",
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                // Color de texto secundario del tema
-                                color = secondaryTextColor
-                            )
-                            IconButton(
-                                onClick = { showDeleteDialog = true },
-                                modifier = Modifier.size(28.dp)
+                    Text(
+                        n.appName,
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        // Usa el color correspondiente al fondo de la tarjeta
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    IconButton(onClick = {
+                        if (isEditing) {
+                            if (editedMessage.trim().isEmpty()) {
+                                showConfirmEmptyNoteDialog = true
+                            } else {
+                                vm.updateNotificationMessage(n.id, editedMessage.trim())
+                                isEditing = false
+                            }
+                        } else {
+                            editedMessage = n.message ?: ""
+                            isEditing = true
+                        }
+                    }) {
+                        Icon(
+                            imageVector = when {
+                                isEditing -> Icons.Default.Check
+                                editedMessage.isNotBlank() -> Icons.Default.Note
+                                else -> Icons.Default.Edit
+                            },
+                            contentDescription = if (isEditing) "Guardar nota" else "Editar nota",
+                            // Usa un color primario del tema para el icono
+                            tint = primaryTextColor
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(2.dp))
+
+                Text(
+                    "De: ${n.senderName}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    // Un color de texto secundario para menor énfasis
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Text(
+                        "S/ %.2f".format(n.amount),
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                        // Usa el color primario del tema
+                        color = primaryTextColor
+                    )
+                    Text(
+                        "HORA: $hora",
+                        style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
+                        // Usa el color secundario del tema
+                        color = secondaryTextColor
+                    )
+                }
+
+                Spacer(Modifier.height(6.dp))
+
+                if (isEditing) {
+                    OutlinedTextField(
+                        value = editedMessage,
+                        onValueChange = { editedMessage = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 0.dp)
+                            .focusRequester(focusRequester),
+                        label = { Text("Escribe tu nota") },
+                        maxLines = 4,
+                        textStyle = MaterialTheme.typography.bodyMedium,
+                        // Colores del TextField que se adaptan al tema
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
+                                alpha = 0.3f
+                            ),
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            cursorColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                } else if (n.message?.isNotBlank() == true) { // Usamos n.message como fuente de verdad
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showFullMessage = !showFullMessage }
+                            .padding(vertical = 2.dp)
+                    ) {
+                        if (showFullMessage) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Eliminar nota",
-                                    // Color de error del tema
-                                    tint = MaterialTheme.colorScheme.error
+                                Text(
+                                    text = "Nota:",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    // Color de texto secundario del tema
+                                    color = secondaryTextColor
+                                )
+                                IconButton(
+                                    onClick = { showDeleteDialog = true },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Eliminar nota",
+                                        // Color de error del tema
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = n.message,
+                                style = MaterialTheme.typography.bodyMedium,
+                                // Color principal sobre la superficie de la nota
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Nota: ",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = secondaryTextColor
+                                )
+                                Text(
+                                    text = n.message,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = editedMessage,
-                            style = MaterialTheme.typography.bodyMedium,
-                            // Color principal sobre la superficie de la nota
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
-                    } else {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Nota: ",
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                color = secondaryTextColor
-                            )
-                            Text(
-                                text = editedMessage,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
                     }
                 }
             }
         }
-    }
 
-    if (showDeleteDialog) {
-        ConfirmDeleteDialog(
-            onConfirm = {
-                vm.clearNotificationNote(n.id)
-                showFullMessage = false
-                showDeleteDialog = false
-            },
-            onDismiss = { showDeleteDialog = false }
-        )
-    }
-    if (showConfirmEmptyNoteDialog) {
-        ConfirmEmptyNoteDialog(
-            onConfirm = {
-                vm.updateNotificationMessage(n.id, editedMessage.trim())
-                isEditing = false
-                showFullMessage = false
-                showConfirmEmptyNoteDialog = false
-            },
-            onDismiss = { showConfirmEmptyNoteDialog = false }
-        )
+        if (showDeleteDialog) {
+            ConfirmDeleteDialog(
+                onConfirm = {
+                    vm.clearNotificationNote(n.id)
+                    showFullMessage = false
+                    showDeleteDialog = false
+                },
+                onDismiss = { showDeleteDialog = false }
+            )
+        }
+        if (showConfirmEmptyNoteDialog) {
+            ConfirmEmptyNoteDialog(
+                onConfirm = {
+                    vm.updateNotificationMessage(n.id, editedMessage.trim())
+                    isEditing = false
+                    showFullMessage = false
+                    showConfirmEmptyNoteDialog = false
+                },
+                onDismiss = { showConfirmEmptyNoteDialog = false }
+            )
+        }
     }
 }
 
@@ -580,7 +635,9 @@ fun NotificationScreen(vm: NotificationViewModel) {
         contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(notifs) { n -> NotificationCard(n, vm) }
+        items(notifs, key = { it.id }) { n ->
+            NotificationCard(n, vm)
+        }
     }
 }
 

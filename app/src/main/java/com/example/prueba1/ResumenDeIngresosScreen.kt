@@ -51,15 +51,14 @@ fun ResumenDeIngresosScreen(vm: NotificationViewModel) {
     var isExporting by remember { mutableStateOf(false) }
 
     // --- LÓGICA DE FILTRADO ---
-    val notificaciones = remember(selectionMode, selectedSingleDate, selectedDateRange, vm.notifications) {
-        when (selectionMode) {
-            DateSelectionMode.SINGLE -> {
-                vm.notifications.filter {
-                    selectedSingleDate?.let { singleDate ->
-                        Instant.ofEpochMilli(it.date).atZone(ZoneId.systemDefault()).toLocalDate() == singleDate
-                    } ?: false
-                }
+    val notificaciones = when (selectionMode) {
+        DateSelectionMode.SINGLE -> {
+            vm.notifications.filter {
+                selectedSingleDate?.let { singleDate ->
+                    Instant.ofEpochMilli(it.date).atZone(ZoneId.systemDefault()).toLocalDate() == singleDate
+                } ?: false
             }
+        }
             DateSelectionMode.MULTIPLE -> {
                 vm.notifications.filter {
                     selectedDateRange?.let { range ->
@@ -69,7 +68,7 @@ fun ResumenDeIngresosScreen(vm: NotificationViewModel) {
                 }
             }
             DateSelectionMode.ALL -> vm.notifications
-        }.sortedByDescending { it.date }
+        }.sortedByDescending { it.date
     }
 
     val totalAmount = notificaciones.sumOf { it.amount }
