@@ -1,5 +1,6 @@
 package com.minka.app
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -60,7 +61,11 @@ import kotlinx.coroutines.launch
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.lerp
-
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudQueue
 
 sealed class Dest(val route: String, val icon: ImageVector, val label: String) {
     object Notifications: Dest("main", Icons.Default.Payment, "Pagos")
@@ -80,6 +85,8 @@ fun MainScreen(
     val currentRoute = currentBackStack?.destination?.route
     val showFilters = remember { mutableStateOf(false) }
     val isLoading by vm.isLoading.collectAsState() // Observa el estado de carga
+
+    val connectionStatus by vm.connectionStatus.collectAsState()
 
     Prueba1Theme { // Asegúrate de que tu tema esté disponible
         Box(modifier = Modifier.fillMaxSize()) {
@@ -108,6 +115,39 @@ fun MainScreen(
                             }
                         },
                         actions = {
+                            val (icon, color, description) = when (connectionStatus) {
+                                ConnectionStatus.CONNECTED -> Triple(
+                                    Icons.Filled.CloudQueue, // Ícono de nube conectada
+                                    MaterialTheme.colorScheme.primary, // Color verde/azul de éxito
+                                    "Conectado al servidor"
+                                )
+                                ConnectionStatus.DISCONNECTED -> Triple(
+                                    Icons.Filled.CloudOff, // Ícono de nube desconectada
+                                    MaterialTheme.colorScheme.error, // Color rojo de error
+                                    "Sin conexión"
+                                )
+                                // 'else' soluciona el error de "when must be exhaustive"
+                                // y cubre el estado INITIAL.
+                                else -> Triple(null, Color.Unspecified, "")
+                            }
+
+                            if (icon != null) {
+                                // Necesitamos el contexto para mostrar el Toast
+                                val context = LocalContext.current
+                                // Envolvemos el Icon en un IconButton para hacerlo clickeable
+                                IconButton(onClick = {
+                                    // Mostramos un Toast con el estado al hacer clic
+                                    Toast.makeText(context, description, Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = description,
+                                        tint = color,
+                                        modifier = Modifier.padding(horizontal = 8.dp)
+                                    )
+                                }
+                            }
+                            // --- FIN DE LA CORRECCIÓN ---
                             IconButton(onClick = onOpenCameraClicked) {
                                 Icon(
                                     imageVector = Icons.Default.QrCode,

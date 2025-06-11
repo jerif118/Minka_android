@@ -48,6 +48,8 @@ import com.minka.app.dataStore
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
+import com.example.prueba1.ws.WebSocketManager
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LinkedDevicesScreen(onBack: () -> Unit) {
@@ -135,16 +137,21 @@ fun LinkedDevicesScreen(onBack: () -> Unit) {
                             Spacer(Modifier.width(12.dp))
                             Button(
                                 onClick = {
+
+                                    WebSocketManager.prepareForManualShutdown()
+
                                     // Desvincular manual
                                     ctx.stopService(Intent(ctx, WebSocketService::class.java))
                                     WorkManager.getInstance(ctx)
                                         .cancelUniqueWork("ws_reconnect")
                                     ctx.getSharedPreferences("ws_prefs", Context.MODE_PRIVATE)
                                         .edit()
-                                        .remove("clientId")
-                                        .remove("roomId")
-                                        .remove("password")
+                                        .clear()
                                         .apply()
+                                    // 4. Envía la señal para notificar a la UI que la sesión terminó.
+                                    LocalBroadcastManager.getInstance(ctx)
+                                        .sendBroadcast(Intent(WebSocketService.ACTION_SESSION_ENDED))
+
                                     scope.launch {
                                         ctx.dataStore.edit { p ->
                                             p[devicesK] = p[devicesK]?.minus(dev) ?: emptySet()

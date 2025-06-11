@@ -52,6 +52,13 @@ class WebSocketService : Service() {
         const val EXTRA_MESSAGE = "extra_message"
         private const val NOTIF_ID = 1001
         const val KEY_SHOULD_RECONNECT = "shouldReconnect"
+
+        fun requestReconnect(context: Context) {
+            val intent = Intent(context, WebSocketService::class.java)
+            // Simplemente iniciar el servicio es suficiente, ya que su onStartCommand
+            // se asegurará de llamar a openSocket si es necesario.
+            context.startService(intent)
+        }
     }
 
     private val socketLock = Any()

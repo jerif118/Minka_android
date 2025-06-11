@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import android.util.Log // Import para Log.d
 
+import kotlinx.coroutines.flow.asStateFlow
+import androidx.lifecycle.ViewModel
+
 // Importaciones cruciales para el paquete 'com.minka.app'
 import com.minka.app.NotificationData
 import com.minka.app.dataStore
@@ -23,6 +26,12 @@ sealed class DialogState {
     object Hidden : DialogState()
     data class ConfirmDelete(val notificationId: String) : DialogState()
     data class ConfirmEmptyNote(val notificationId: String, val currentText: String) : DialogState()
+}
+
+enum class ConnectionStatus {
+    INITIAL,
+    CONNECTED,
+    DISCONNECTED
 }
 
 class NotificationViewModel(application: Application) : AndroidViewModel(application) {
@@ -84,6 +93,13 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             }
             applyFilter(null)
         }
+    }
+
+    private val _connectionStatus = MutableStateFlow(ConnectionStatus.INITIAL)
+    val connectionStatus: StateFlow<ConnectionStatus> = _connectionStatus.asStateFlow()
+
+    fun updateConnectionStatus(newStatus: ConnectionStatus) {
+        _connectionStatus.value = newStatus
     }
 
     fun updateNotificationMessage(id: String, newMessage: String) {

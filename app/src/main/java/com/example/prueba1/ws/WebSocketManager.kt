@@ -2,23 +2,20 @@ package com.example.prueba1.ws
 
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.util.Log
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import com.google.gson.JsonParser
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.minka.app.NotificationData
+import kotlinx.coroutines.*
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import androidx.work.*
-import java.util.concurrent.TimeUnit
 
 /**
- * Solo parsea mensajes y notifica a la UI.
- * La conexión la maneja [WebSocketService]; si se cierra, pide
- * reconexión mediante [ReconnectWorker].
+ * Gestiona la lógica de mensajes y la estrategia de reconexión del WebSocket.
  */
 
 private fun isNetworkAvailable(context: Context): Boolean {
@@ -30,219 +27,247 @@ private fun isNetworkAvailable(context: Context): Boolean {
 
 object WebSocketManager {
 
+    @Volatile private var isManualShutdown = false
+
+    private const val TAG = "WebSocketManager"
+    private const val ROOM_FULL_RETRY_TAG = "RoomFullRetryLogic"
+    // --- Variables de estado y reintentos ---
     private val gson = Gson()
-
-    /** Referencia al WebSocket activo (la actualiza WebSocketService) */
     private var socket: WebSocket? = null
-
-    /**
-     * Callback invoked when WebSocket is unavailable and a fallback (e.g., REST API) should be used.
-     * The service should assign this to send via HTTP when in Doze mode.
-     */
-    private var onFallback: ((NotificationData) -> Unit)? = null
-
-    /**
-     * Registra (o elimina) la rutina que se usará cuando el WebSocket no esté
-     * disponible (p.ej. Doze).  Pasa `null` para desactivar.
-     */
     var isReconnecting: Boolean = false
 
-    fun setFallback(cb: ((NotificationData) -> Unit)?) {
-        onFallback = cb
-    }
+    private var roomFullRetryCount = 0
+    private var roomFullRetryJob: Job? = null
+    // <-- CAMBIO: Ajustado a 2 para permitir un total de 3 intentos (1 inicial + 2 reintentos).
+    private const val MAX_ROOM_FULL_RETRIES = 2
+    @Volatile private var isClosingForRoomFull = false
 
-    /** Limpia la rutina alternativa, volviendo a modo WebSocket puro. */
-    fun clearFallback() {
-        onFallback = null
-    }
+    private var generalRetryCount = 0
+    private var generalRetryJob: Job? = null
+    private const val MAX_GENERAL_RETRIES = 3
 
-    /**
-     * Envía al servidor la acción "leave" con un motivo opcional.
-     * @param reason Texto que explica por qué se desconecta (ej. "doze").
-     */
+    // --- Manejadores de eventos públicos ---
+    var onNotification: ((NotificationData) -> Unit)? = null
+    var onError: ((String) -> Unit)? = null
+    var onFallback: ((NotificationData) -> Unit)? = null
+    fun setFallback(cb: ((NotificationData) -> Unit)?) { onFallback = cb }
+    fun clearFallback() { onFallback = null }
+
+    internal fun updateSocket(ws: WebSocket?) { socket = ws }
+
     fun sendLeave(reason: String = ""): Boolean {
-        val s = socket ?: run {
-            Log.w("WS_Manager", "sendLeave llamado pero socket es null")
-            return false
-        }
-        // Construir el payload con motivo si se proporcionó
-        val payloadMap = mutableMapOf<String, Any>("action" to "leave")
-        if (reason.isNotBlank()) {
-            payloadMap["reason"] = reason
-        }
-        val payload = gson.toJson(payloadMap)
-        Log.d("WS_Manager", "Enviando leave payload: $payload")
+        val s = socket ?: return false
+        val payload = gson.toJson(mapOf("action" to "leave", "reason" to reason.ifBlank { null }))
+        Log.d(TAG, "Enviando leave payload: $payload")
         return s.send(payload)
     }
 
     private const val PREFS_NAME = "ws_prefs"
     private const val KEY_SHOULD_RECONNECT = "should_reconnect"
-
     private fun setShouldReconnect(ctx: Context, value: Boolean) {
-        val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putBoolean(KEY_SHOULD_RECONNECT, value).apply()
+        ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putBoolean(KEY_SHOULD_RECONNECT, value).apply()
     }
-
     private fun shouldReconnect(ctx: Context): Boolean {
-        val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getBoolean(KEY_SHOULD_RECONNECT, true)
+        return ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getBoolean(KEY_SHOULD_RECONNECT, true)
     }
 
-    var onNotification: ((NotificationData) -> Unit)? = null
-    var onError: ((String) -> Unit)? = null
+    fun prepareForManualShutdown() {
+        Log.i(TAG, "Preparando para un cierre manual de la sesión.")
+        isManualShutdown = true
+    }
 
+    // --- LISTENER PRINCIPAL DEL WEBSOCKET ---
     fun listener(ctx: Context) = object : WebSocketListener() {
 
         override fun onOpen(ws: WebSocket, resp: Response) {
-            Log.i("WS", "Conectado: $resp")
+            Log.i(TAG, "Conectado: $resp")
             LocalBroadcastManager.getInstance(ctx).sendBroadcast(Intent(WebSocketService.ACTION_WS_CONNECTED))
             setShouldReconnect(ctx, true)
-
-            // 2. Solo enviamos el mensaje si 'isReconnecting' es verdadero.
-            if (isReconnecting) {
-                try {
-                    val prefs = ctx.getSharedPreferences("ws_prefs", Context.MODE_PRIVATE)
-                    val clientId = prefs.getString("clientId", "unknown")
-                    val reconnectPayload = mapOf(
-                        "event" to "client_reconnected",
-                        "clientId" to clientId,
-                        "message" to "El cliente $clientId se ha reconectado."
-                    )
-                    val jsonPayload = gson.toJson(reconnectPayload)
-                    if (ws.send(jsonPayload)) {
-                        Log.i("WS_Manager", "Mensaje de reconexión enviado exitosamente: $jsonPayload")
-                    } else {
-                        Log.w("WS_Manager", "Falló el envío del mensaje de reconexión.")
-                    }
-                } catch (e: Exception) {
-                    Log.e("WS_Manager", "Error al construir o enviar el mensaje de reconexión.", e)
-                }
-            }
-            // 3. Reseteamos la bandera después de cada conexión exitosa.
-            isReconnecting = false
         }
 
         override fun onMessage(ws: WebSocket, text: String) {
-            Log.d("WS_Manager", "Received message: $text")
-            val jsonElem = JsonParser.parseString(text)
-            if (jsonElem.isJsonObject) {
-                val obj = jsonElem.asJsonObject
-                if (obj.has("room_created") || (obj.has("event") && obj.get("event").asString == "joined")) {
-                    return
-                }
-                if (obj.has("info") && obj.get("info").asString.contains("desconect", ignoreCase = true)) {
-                    val info = obj.get("info").asString
-                    setShouldReconnect(ctx, false)
-                    onError?.invoke(info)
-                    LocalBroadcastManager.getInstance(ctx)
-                        .sendBroadcast(Intent(WebSocketService.ACTION_SESSION_ENDED))
-                    return
-                }
+            Log.d(TAG, "↓ Mensaje recibido del servidor: $text")
+
+            val jsonElem = try { JsonParser.parseString(text) } catch (e: Exception) {
+                Log.w(TAG, "Mensaje recibido no es un JSON válido: $text"); return
             }
+
+            if (!jsonElem.isJsonObject) { Log.w(TAG, "Mensaje no es un JSON Object."); return }
+            val obj = jsonElem.asJsonObject
+
+            if (obj.has("code") && obj.get("code").asString == "ROOM_FULL") {
+                Log.w(ROOM_FULL_RETRY_TAG, "-> ¡RECHAZO! El servidor respondió con 'ROOM_FULL'.")
+                isClosingForRoomFull = true
+                ws.close(1001, "Client closing due to ROOM_FULL")
+                return
+            }
+
+            // Lógica para conexión exitosa (joined/room_created)
+            // Lógica para conexión exitosa (joined/room_created)
+            if (obj.has("room_created") || (obj.has("event") && obj.get("event").asString == "joined")) {
+                Log.i(TAG, "✅ El servidor confirmó la unión. La sesión es válida. Reseteando todos los contadores de reintentos.")
+
+                roomFullRetryCount = 0
+                roomFullRetryJob?.cancel()
+                generalRetryCount = 0
+                generalRetryJob?.cancel()
+
+                if (isReconnecting) {
+                    Log.d(TAG, "Enviando evento 'client_reconnected' post-confirmación.")
+                    try {
+                        val prefs = ctx.getSharedPreferences("ws_prefs", Context.MODE_PRIVATE)
+                        val clientId = prefs.getString("clientId", "unknown")
+                        val reconnectPayload = mapOf(
+                            "event" to "client_reconnected", "clientId" to clientId,
+                            "message" to "El cliente $clientId se ha reconectado exitosamente."
+                        )
+                        ws.send(gson.toJson(reconnectPayload))
+                    } catch (e: Exception) { Log.e(TAG, "Error al enviar mensaje de reconexión.", e) }
+                    isReconnecting = false
+                }
+                return
+            }
+
+            // Lógica para fin de sesión explícito
+            if (obj.has("info") && obj.get("info").asString.contains("desconect", ignoreCase = true)) {
+                val info = obj.get("info").asString
+                setShouldReconnect(ctx, false)
+                onError?.invoke(info)
+                LocalBroadcastManager.getInstance(ctx).sendBroadcast(Intent(WebSocketService.ACTION_SESSION_ENDED))
+                return
+            }
+
+            // Procesamiento de notificaciones normales
             try {
-                val data = gson.fromJson(text, NotificationData::class.java)
-                onNotification?.invoke(data)
+                onNotification?.invoke(gson.fromJson(text, NotificationData::class.java))
             } catch (e: Exception) {
-                Log.e("WS_Manager", "JSON parsing error: ${e.message} for message: $text", e)
-                onError?.invoke("JSON inválido: ${e.message}")
+                Log.e(TAG, "Error al parsear JSON de notificación: ${e.message}", e)
             }
         }
 
         override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-            Log.i("WS", "Cerrado: $code / $reason")
+            Log.w(TAG, "🔌 CONEXIÓN CERRADA: Código=$code, Razón='$reason'")
+
+            if (isManualShutdown) {
+                isManualShutdown = false // Reseteamos la bandera para la próxima sesión
+                Log.i(TAG, "Cierre manual detectado. No se enviará broadcast de desconexión.")
+                return // IMPORTANTE: Salimos de la función aquí.
+            }
+
             LocalBroadcastManager.getInstance(ctx).sendBroadcast(Intent(WebSocketService.ACTION_WS_DISCONNECTED))
-            if (shouldReconnect(ctx)) {
-                Log.i("WS", "Conexión cerrada. Programando ReconnectWorker con backoff.")
-                // ## CAMBIO 1 ##
-                enqueueWithBackoff(ctx)
+
+            if (isClosingForRoomFull) {
+                isClosingForRoomFull = false
+                Log.i(ROOM_FULL_RETRY_TAG, "Cierre por ROOM_FULL. Activando lógica de reintentos específica.")
+                handleRoomFullRetry(ctx)
+            } else if (shouldReconnect(ctx)) {
+                // ESTA ES LA LÍNEA CLAVE
+                Log.i(TAG, "-> Decisión: Cierre inesperado. Activando lógica de reconexión general con corutinas.")
+                handleGeneralReconnect(ctx)
             }
         }
 
         override fun onFailure(ws: WebSocket, t: Throwable, resp: Response?) {
-            Log.w("WS", "Fallo WS: ${t.localizedMessage}")
+            Log.e(TAG, "💥 FALLO DE CONEXIÓN: ${t.javaClass.simpleName} - ${t.message}", t)
+
+            if (isManualShutdown) {
+                isManualShutdown = false // Reseteamos la bandera
+                Log.i(TAG, "Fallo durante cierre manual detectado. No se enviará broadcast de desconexión.")
+                return // IMPORTANTE: Salimos de la función aquí.
+            }
+
             LocalBroadcastManager.getInstance(ctx).sendBroadcast(Intent(WebSocketService.ACTION_WS_DISCONNECTED))
-            if (isNetworkAvailable(ctx)) {
-                Log.i("WS", "Hay internet pero la conexión falló. Programando ReconnectWorker con backoff.")
-                onError?.invoke("No se pudo conectar al servidor. Reintentando en segundo plano...")
-                if (shouldReconnect(ctx)) {
-                    // ## CAMBIO 1 ##
-                    enqueueWithBackoff(ctx)
-                }
-            } else {
-                Log.i("WS", "No hay internet. Esperando a que la red vuelva para reintentar.")
-                onError?.invoke("Sin conexión a internet. Se reintentará cuando vuelva la red.")
+
+            if (shouldReconnect(ctx)) {
+                // ESTA ES LA OTRA LÍNEA CLAVE
+                Log.i(TAG, "-> Decisión: Fallo detectado. Activando lógica de reconexión general con corutinas.")
+                handleGeneralReconnect(ctx)
             }
         }
     }
 
-    /* ---------------------------------------------------------------- */
-    /*   API para que otras capas envíen mensajes a través del socket   */
-    /* ---------------------------------------------------------------- */
+    // --- LÓGICAS DE REINTENTO PERSONALIZADAS ---
 
-    /**
-     * Actualiza la referencia al socket.  Sólo debe llamarlo
-     * [WebSocketService] cuando crea o destruye la conexión.
-     */
-    internal fun updateSocket(ws: WebSocket?) {
-        socket = ws
+    private fun handleGeneralReconnect(ctx: Context) {
+        generalRetryJob?.cancel()
+        generalRetryJob = CoroutineScope(Dispatchers.IO).launch {
+            if (generalRetryCount > 0) {
+            }
+
+            val delayMillis = when (generalRetryCount) {
+                0 -> 3_000L
+                1 -> 10_000L
+                2 -> 20_000L
+                else -> -1L
+            }
+
+            if (delayMillis == -1L) {
+                Log.e(TAG, "❌ LÍMITE DE REINTENTOS GENERALES ($MAX_GENERAL_RETRIES) ALCANZADO. Rindiéndose.")
+                generalRetryCount = 0
+                return@launch
+            }
+
+            Log.i(TAG, "--> Planificando intento de reconexión #${generalRetryCount + 1} de $MAX_GENERAL_RETRIES")
+            Log.i(TAG, "    Esperando ${delayMillis / 1000} segundos...")
+            delay(delayMillis)
+
+            if (!isNetworkAvailable(ctx)) {
+                Log.w(TAG, "    Intento #${generalRetryCount + 1} abortado. Aún no hay conexión a internet. Se re-evaluará en el próximo ciclo de fallo.")
+                return@launch
+            }
+
+            generalRetryCount++
+            Log.i(TAG, "    Ejecutando intento #$generalRetryCount: Solicitando al servicio que se reconecte.")
+            WebSocketService.requestReconnect(ctx)
+        }
     }
 
-    /**
-     * Envía una notificación al servidor.  Devuelve true si se pudo
-     * enviar, false si no hay conexión.
-     */
-    /*fun sendNotification(notification: NotificationData): Boolean {
-        val s = socket ?: run {
-            Log.w("WS_Manager", "WebSocket is null, invoking fallback for notification")
-            onFallback?.invoke(notification)
-            return false
+    private fun handleRoomFullRetry(ctx: Context) {
+        roomFullRetryJob?.cancel()
+        roomFullRetryJob = CoroutineScope(Dispatchers.IO).launch {
+            // Se incrementa el contador *antes* de decidir qué hacer.
+            // La primera vez que esta función corre, `roomFullRetryCount` será 1.
+            roomFullRetryCount++
+
+            // Si el número de reintentos supera el máximo, nos rendimos.
+            // Con MAX = 2, se rendirá cuando roomFullRetryCount llegue a 3.
+            if (roomFullRetryCount > MAX_ROOM_FULL_RETRIES) {
+                Log.e(ROOM_FULL_RETRY_TAG, "❌ LÍMITE DE REINTENTOS ($MAX_ROOM_FULL_RETRIES) para ROOM_FULL alcanzado. Rindiéndose.")
+                LocalBroadcastManager.getInstance(ctx).sendBroadcast(Intent(WebSocketService.ACTION_SESSION_ENDED))
+                roomFullRetryCount = 0 // Reseteamos para el futuro
+                return@launch
+            }
+
+            // Determinamos el tiempo de espera según el número de reintento.
+            val delayMillis = when (roomFullRetryCount) {
+                1 -> 10_000L // 1er reintento (2º intento total): Espera 10 segundos.
+                2 -> 20_000L // 2º reintento (3er intento total): Espera 20 segundos.
+                else -> 0L // No debería ocurrir con la lógica actual, pero es un fallback seguro.
+            }
+
+            // Total de intentos = 1 (el inicial) + MAX_ROOM_FULL_RETRIES (2) = 3
+            val totalAttempts = MAX_ROOM_FULL_RETRIES + 1
+            val currentAttempt = roomFullRetryCount + 1
+
+            Log.i(ROOM_FULL_RETRY_TAG, "--> [INTENTO POR ROOM_FULL: $currentAttempt de $totalAttempts]")
+            Log.i(ROOM_FULL_RETRY_TAG, "    Esperando ${delayMillis / 1000} segundos antes del próximo intento...")
+            delay(delayMillis)
+
+            Log.i(ROOM_FULL_RETRY_TAG, "    Ejecutando reintento #$roomFullRetryCount.")
+            WebSocketService.requestReconnect(ctx)
         }
-        val jsonPayload = gson.toJson(mapOf("message" to notification))
-        Log.d("WS_Manager", "–> Invocando a sendNotification con payload: $jsonPayload")
-        val sent = s.send(jsonPayload)
-        Log.d("WS_Manager", "   …s.send() devolvió: $sent")
-        return sent
+    }
 
+    // --- ENVÍO DE NOTIFICACIONES ---
 
-    }*/
     fun sendNotification(notification: NotificationData): Boolean {
         val s = socket ?: run {
-            Log.w("WS_Manager", "WebSocket is null; enviando por REST")
+            Log.w(TAG, "WebSocket is null; enviando por fallback REST")
             onFallback?.invoke(notification)
             return false
         }
         val jsonPayload = gson.toJson(mapOf("message" to notification))
-        Log.d("WS_Manager", "--> sendNotification payload: $jsonPayload")
-        val sent = s.send(jsonPayload)
-        Log.d("WS_Manager", "   …s.send() devolvió: $sent")
-        if (!sent) {
-            Log.w("WS_Manager", "WebSocket send falló; enviando por REST")
-            onFallback?.invoke(notification)
-        }
-        return sent
+        Log.d(TAG, "↑ ENVIANDO MENSAJE AL SERVIDOR: ${notification.title}")
+        return s.send(jsonPayload)
     }
-
-    fun enqueueWithBackoff(ctx: Context) {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-
-        val reconnectRequest = OneTimeWorkRequestBuilder<ReconnectWorker>()
-            .setConstraints(constraints)
-            .setBackoffCriteria(
-                BackoffPolicy.EXPONENTIAL,
-                // ## CAMBIO 2 ##
-                WorkRequest.MIN_BACKOFF_MILLIS, // Empezar con 10 segundos
-                TimeUnit.MILLISECONDS
-            )
-            .build()
-
-        Log.i("WS_Manager", "Encolando trabajo de reconexión único con política de backoff.")
-        WorkManager.getInstance(ctx).enqueueUniqueWork(
-            "ws_reconnect",
-            ExistingWorkPolicy.REPLACE,
-            reconnectRequest
-        )
-    }
-
 }

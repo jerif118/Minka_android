@@ -2,8 +2,11 @@ package com.minka.app
 
 import android.Manifest
 import android.app.AlertDialog
+import android.content.BroadcastReceiver
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -15,19 +18,21 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.runtime.DisposableEffect
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.navigation.compose.rememberNavController
+import com.example.prueba1.ui.theme.Prueba1Theme
 import com.example.prueba1.ws.WebSocketManager
 import com.example.prueba1.ws.WebSocketService
 import com.google.gson.Gson
-import java.util.*
-import com.example.prueba1.ui.theme.Prueba1Theme
-import androidx.lifecycle.lifecycleScope
-import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.*
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 
 data class QrInfo(val room_id: String, val password: String)
 
@@ -35,8 +40,36 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var qrScanner: QrScanner
 
+    // <-- 1. OBTENEMOS EL VIEWMODEL A NIVEL DE ACTIVIDAD -->
+    // Esto nos permite acceder a 'vm' desde cualquier parte de la Activity,
+    // incluido el BroadcastReceiver.
+    private val vm: NotificationViewModel by viewModels()
+
+    // <-- 2. DEFINIMOS EL "OYENTE" DE CAMBIOS DE CONEXIÓN -->
+    private val connectionStatusReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            // Cuando recibimos una señal, actualizamos el ViewModel.
+            // La UI reaccionará automáticamente a este cambio.
+            when (intent?.action) {
+                WebSocketService.ACTION_WS_CONNECTED -> {
+                    vm.updateConnectionStatus(ConnectionStatus.CONNECTED)
+                    Log.d("MainActivity", "Receiver: Conexión WebSocket establecida.")
+                }
+                WebSocketService.ACTION_WS_DISCONNECTED -> {
+                    vm.updateConnectionStatus(ConnectionStatus.DISCONNECTED)
+                    Log.d("MainActivity", "Receiver: Conexión WebSocket perdida.")
+                }
+                WebSocketService.ACTION_SESSION_ENDED -> {
+                    vm.updateConnectionStatus(ConnectionStatus.INITIAL)
+                    Log.d("MainActivity", "Receiver: Sesión finalizada.")
+                }
+            }
+        }
+    }
+
+
     companion object {
-        private const val REQ_DATA_SYNC = 2002   // request‑code para permiso Data‑Sync (API 34+)
+        private const val REQ_DATA_SYNC = 2002
     }
 
     private fun isNotificationServiceEnabled(): Boolean {
@@ -75,26 +108,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        /* ───────────────────────── PERMISO ANDROID 13+ ───────────────────────── */
+        /* ───────────────────────── PERMISOS ───────────────────────── */
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
                 this,
                 Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            requestPermissions(
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                1001                                  // request‑code arbitrario
-            )
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
         }
-        // Permiso especial Android 14+ para FGS tipo dataSync
         requestDataSyncPermissionIfNeeded()
 
-        /* ─────────────────────────────────────────────────────────────────────── */
         if (isNotificationServiceEnabled()) {
             toggleNotificationListenerService()
         } else {
-            // Mostrar diálogo pidiendo al usuario que habilite el servicio
             AlertDialog.Builder(this)
                 .setTitle("Permiso necesario")
                 .setMessage("Para recibir notificaciones de pagos, debes habilitar el acceso a notificaciones")
@@ -105,7 +132,6 @@ class MainActivity : ComponentActivity() {
                 .show()
         }
 
-        // 2) Solicitar exclusión de optimizaciones de batería (opcional)
         val pm = getSystemService(PowerManager::class.java)
         if (pm != null && !pm.isIgnoringBatteryOptimizations(packageName)) {
             val intentOpt = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
@@ -116,13 +142,6 @@ class MainActivity : ComponentActivity() {
 
         qrScanner = QrScanner(this)
         enableEdgeToEdge()
-        // Configura los callbacks del WebSocketManager aquí
-        /*WebSocketManager.onNotification = { notificationData ->
-            // Esto se ejecutará cuando se reciba una notificación desde el servidor
-            runOnUiThread {
-                findViewById<NotificationViewModel>(R.id.notificationViewModel)?.addNotification(notificationData)
-            }
-        }*/
 
         WebSocketManager.onError = { errorMessage ->
             runOnUiThread {
@@ -130,11 +149,12 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-
         setContent {
             Prueba1Theme {
                 val nav = rememberNavController()
-                val vm: NotificationViewModel = viewModel()
+
+                // Ya no necesitamos 'val vm: NotificationViewModel = viewModel()' aquí,
+                // porque ya lo tenemos como una propiedad de la Activity.
 
                 DisposableEffect(Unit) {
                     MyNotificationListenerService.notificationListener = vm::addNotification
@@ -144,22 +164,19 @@ class MainActivity : ComponentActivity() {
                 }
                 MainScreen(
                     navController = nav,
-                    vm = vm,
+                    vm = vm, // Usamos la instancia de la Activity.
                     onOpenCameraClicked = {
-                        // ▼▼▼ LÓGICA DE VERIFICACIÓN AL HACER CLIC ▼▼▼
                         lifecycleScope.launch {
                             val devicesKey = stringSetPreferencesKey("linked_devices")
                             val currentDevices = dataStore.data.first()[devicesKey] ?: emptySet()
 
                             if (currentDevices.isNotEmpty()) {
-                                // Si ya hay un dispositivo, muestra un mensaje
                                 Toast.makeText(
                                     this@MainActivity,
                                     "Ya tienes un dispositivo vinculado. Desvincula el actual para agregar uno nuevo.",
                                     Toast.LENGTH_LONG
                                 ).show()
                             } else {
-                                // Si no hay dispositivos, procede a escanear
                                 qrScanner.initiateQrScan()
                             }
                         }
@@ -169,7 +186,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /* ─────────────── Resultado del escáner QR ─────────────── */
+    // <-- 3. REGISTRAMOS EL "OYENTE" CUANDO LA APP ES VISIBLE -->
+    override fun onResume() {
+        super.onResume()
+        val intentFilter = IntentFilter().apply {
+            addAction(WebSocketService.ACTION_WS_CONNECTED)
+            addAction(WebSocketService.ACTION_WS_DISCONNECTED)
+            addAction(WebSocketService.ACTION_SESSION_ENDED)
+        }
+        LocalBroadcastManager.getInstance(this).registerReceiver(connectionStatusReceiver, intentFilter)
+    }
+
+    // <-- 4. DEJAMOS DE ESCUCHAR CUANDO LA APP NO ES VISIBLE -->
+    // Esto es crucial para ahorrar batería y evitar errores.
+    override fun onPause() {
+        super.onPause()
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(connectionStatusReceiver)
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         qrScanner.handleResult(requestCode, resultCode, data)?.let { contents ->
@@ -179,7 +213,6 @@ class MainActivity : ComponentActivity() {
                     val currentDevices = applicationContext.dataStore.data.first()[devicesK] ?: emptySet()
 
                     if (currentDevices.isNotEmpty()) {
-                        // Esta comprobación se mantiene como una capa extra de seguridad
                         Toast.makeText(
                             this@MainActivity,
                             "Ya existe una sesión activa. Desvincula el dispositivo actual primero.",
