@@ -207,6 +207,9 @@ class MainActivity : ComponentActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         qrScanner.handleResult(requestCode, resultCode, data)?.let { contents ->
+
+            Log.d("QrScanDebug", "Contenido crudo del QR recibido: '$contents'")
+
             lifecycleScope.launch {
                 try {
                     val devicesK = stringSetPreferencesKey("linked_devices")
@@ -225,6 +228,7 @@ class MainActivity : ComponentActivity() {
                             this@MainActivity,
                             WebSocketService::class.java
                         ).apply {
+                            //putExtra("host", "192.168.18.20:5001")
                             putExtra("host", "192.168.18.20:5001")
                             putExtra("clientId", clientId)
                             putExtra("roomId", info.room_id)

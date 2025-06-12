@@ -139,6 +139,7 @@ fun LinkedDevicesScreen(onBack: () -> Unit) {
                                 onClick = {
 
                                     WebSocketManager.prepareForManualShutdown()
+                                    WebSocketManager.sendLeave("user_logout")
 
                                     // Desvincular manual
                                     ctx.stopService(Intent(ctx, WebSocketService::class.java))

@@ -128,7 +128,7 @@ class WebSocketService : Service() {
 
     private val client by lazy {
         OkHttpClient.Builder()
-            .pingInterval(3, TimeUnit.MINUTES)
+            //.pingInterval(3, TimeUnit.MINUTES)
             .retryOnConnectionFailure(false)
             .connectionPool(ConnectionPool(0, 5, TimeUnit.MINUTES))
             .build()
@@ -190,7 +190,7 @@ class WebSocketService : Service() {
         lbm.unregisterReceiver(sessionEndReceiver)
         lbm.unregisterReceiver(connectionResultReceiver)
         prefs.edit().putBoolean(KEY_SHOULD_RECONNECT, false).apply()
-        WebSocketManager.sendLeave()
+        //WebSocketManager.sendLeave()
         WebSocketManager.updateSocket(null)
         socket?.cancel()
         socket = null
