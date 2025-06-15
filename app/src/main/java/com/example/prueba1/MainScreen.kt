@@ -19,11 +19,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.QrCode
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.Handyman
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,9 +45,9 @@ import androidx.compose.material.icons.filled.*
 import com.example.prueba1.NotificationScreen
 
 sealed class Dest(val route: String, val icon: ImageVector, val label: String) {
-    object Notifications: Dest("main", Icons.Default.Payment, "Pagos")
-    object Tools: Dest("tools", Icons.Default.Build, "Herramientas")
-    object Settings: Dest("config", Icons.Default.Tune, "Configuración")
+    object Notifications: Dest("main", Icons.Rounded.CreditCard, "Pagos")
+    object Tools: Dest("tools", Icons.Rounded.Handyman, "Herramientas")
+    object Settings: Dest("config", Icons.Rounded.Settings, "Configuración")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -122,8 +122,11 @@ fun MainScreen(
                 },
                 bottomBar = {
                     NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 2.dp
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        tonalElevation = 0.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.large)
                     ) {
                         destinations.forEach { dest ->
                             val selected = currentRoute == dest.route

@@ -1,20 +1,26 @@
 package com.minka.app
 
 import android.app.Activity
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+// import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material3.*
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.prueba1.NotificationCard
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -107,7 +113,11 @@ fun ResumenDeIngresosScreen(vm: NotificationViewModel) {
                             // El botón se deshabilita mientras se exporta
                             enabled = !isExporting
                         ) {
-                            Icon(Icons.Default.FileDownload, contentDescription = "Exportar")
+                            Icon(
+                                Icons.Rounded.Download,
+                                contentDescription = "Exportar",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
                         // Se muestra un indicador de progreso si se está exportando
                         if (isExporting) {
@@ -146,24 +156,48 @@ fun ResumenDeIngresosScreen(vm: NotificationViewModel) {
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                SegmentedButton(
-                    shape = MaterialTheme.shapes.medium,
-                    onClick = { selectionMode = DateSelectionMode.SINGLE },
-                    selected = selectionMode == DateSelectionMode.SINGLE
-                ) { Text("Día") }
-                SegmentedButton(
-                    shape = MaterialTheme.shapes.medium,
-                    onClick = { selectionMode = DateSelectionMode.MULTIPLE },
-                    selected = selectionMode == DateSelectionMode.MULTIPLE
-                ) { Text("Varios") }
-                SegmentedButton(
-                    shape = MaterialTheme.shapes.medium,
-                    onClick = { selectionMode = DateSelectionMode.ALL },
-                    selected = selectionMode == DateSelectionMode.ALL
-                ) { Text("Todos") }
+                val segments = listOf(
+                    DateSelectionMode.SINGLE to "Día",
+                    DateSelectionMode.MULTIPLE to "Varios",
+                    DateSelectionMode.ALL to "Todos"
+                )
+                val pill = 28.dp
+
+                segments.forEachIndexed { index, (mode, label) ->
+                    val first = index == 0
+                    val last  = index == segments.lastIndex
+
+                    SegmentedButton(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        shape = when {
+                            first && last -> RoundedCornerShape(pill)
+                            first        -> RoundedCornerShape(
+                                topStart = pill, bottomStart = pill,
+                                topEnd = 0.dp, bottomEnd = 0.dp
+                            )
+                            last         -> RoundedCornerShape(
+                                topEnd = pill, bottomEnd = pill,
+                                topStart = 0.dp, bottomStart = 0.dp
+                            )
+                            else         -> RoundedCornerShape(0.dp)
+                        },
+                        onClick  = { selectionMode = mode },
+                        selected = selectionMode == mode,
+                        colors = SegmentedButtonDefaults.colors(
+                            activeContainerColor   = MaterialTheme.colorScheme.primary,
+                            activeContentColor     = MaterialTheme.colorScheme.onPrimary,
+                            inactiveContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            inactiveContentColor   = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) {
+                        Text(label)
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             if (selectionMode != DateSelectionMode.ALL) {
                 DateDisplayButton(
@@ -266,6 +300,12 @@ private fun DateDisplayButton(
     }
 
     OutlinedButton(
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        shape = MaterialTheme.shapes.large,
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
     ) {

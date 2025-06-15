@@ -9,7 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
@@ -19,6 +20,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.BorderStroke
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 //import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -30,8 +32,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,8 +47,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.graphics.Color
 
 // acceso al DataStore
 //private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -90,7 +92,7 @@ fun AppSettingsScreen(onBack: () -> Unit) {
                 title = { Text("Gestionar Aplicaciones", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
+                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Atrás")
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -116,18 +118,28 @@ fun AppSettingsScreen(onBack: () -> Unit) {
                     )?.contains(component.flattenToString()) == true
                 )
             }
-            Card(
+            OutlinedCard(
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = CardDefaults.outlinedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surface     // ligero, sin bloque gris
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                shape = MaterialTheme.shapes.extraLarge,
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    .padding(vertical = 8.dp)
             ) {
                 ListItem(
-                    headlineContent = { Text("Escucha activa", style = MaterialTheme.typography.bodyLarge) },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Rounded.ArrowBack,   // solo decorativo, mismo tamaño que switch
+                            contentDescription = null,
+                            tint = Color.Transparent,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    },
+                    headlineContent = {
+                        Text("Escucha activa", style = MaterialTheme.typography.titleMedium)
+                    },
                     trailingContent = {
                         Switch(
                             checked = enabled,
@@ -145,7 +157,7 @@ fun AppSettingsScreen(onBack: () -> Unit) {
                             }
                         )
                     },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -156,16 +168,15 @@ fun AppSettingsScreen(onBack: () -> Unit) {
                 items(installedApps) { appInfo ->
                     val iconDrawable = pm.getApplicationIcon(appInfo)
                     val iconBitmap = iconDrawable.toBitmap().asImageBitmap()
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(
+                    OutlinedCard(
+                        colors = CardDefaults.outlinedCardColors(
                             containerColor = MaterialTheme.colorScheme.surface
                         ),
-                        shape = MaterialTheme.shapes.medium,
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                        onClick = { /* no click action for now */ }
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        shape = MaterialTheme.shapes.large,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
                     ) {
                         Row(
                             Modifier
@@ -176,7 +187,7 @@ fun AppSettingsScreen(onBack: () -> Unit) {
                             Image(
                                 bitmap = iconBitmap,
                                 contentDescription = pm.getApplicationLabel(appInfo).toString(),
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(32.dp)
                             )
                             Spacer(modifier = Modifier.width(16.dp))
                             Text(
@@ -184,7 +195,7 @@ fun AppSettingsScreen(onBack: () -> Unit) {
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.weight(1f)
                             )
-                            Spacer(modifier = Modifier.width(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Switch(
                                 checked = selected.contains(appInfo.packageName),
                                 onCheckedChange = { checked ->
