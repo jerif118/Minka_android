@@ -128,5 +128,5 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:<version>")
     implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.animation:animation-core")
-
+    implementation("androidx.security:security-crypto:1.0.0")
 }

@@ -21,6 +21,13 @@ import androidx.lifecycle.ViewModel
 // Importaciones cruciales para el paquete 'com.minka.app'
 import com.minka.app.NotificationData
 import com.minka.app.dataStore
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
+
+sealed class UiEvent {
+    object NewNotificationArrived : UiEvent()
+}
 
 sealed class DialogState {
     object Hidden : DialogState()
@@ -81,17 +88,33 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    private val _uiEvent = MutableSharedFlow<UiEvent>()
+    val uiEvent = _uiEvent.asSharedFlow()
+
     fun addNotification(n: NotificationData) {
         if (n.amount > 0 && processedIds.add(n.id)) {
+            // 1. Se añade la notificación a la lista maestra (esto es correcto y se mantiene)
             notifications.add(0, n)
+
+            // --- LÓGICA CORREGIDA ---
+            // Se reemplaza la línea `applyFilter(...)` con esta nueva lógica:
+            val currentFilter = getCurrentFilterPackageName()
+            // La nueva notificación solo se añade a la vista actual si:
+            // a) No hay ningún filtro activo (currentFilter es null)
+            // b) O si la notificación pertenece al filtro que ya está activo
+            if (currentFilter == null || n.packageName == currentFilter) {
+                _filteredNotifications.add(0, n)
+            }
+            // --- FIN DE LA LÓGICA CORREGIDA ---
+
             viewModelScope.launch {
                 val jsonList = Gson().toJson(notifications)
                 getApplication<Application>().dataStore.edit { prefs ->
                     prefs[stringPreferencesKey(NOTIFICATIONS_KEY)] = jsonList
                 }
-                Log.d(TAG, "Notification added and saved: ${n.id}")
+                // Se emite el evento para que la UI sepa que debe hacer scroll al principio
+                _uiEvent.emit(UiEvent.NewNotificationArrived)
             }
-            applyFilter(null)
         }
     }
 
@@ -128,7 +151,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             }
         }
     }
-    
+
     fun clearNotificationNote(id: String) {
         val originalNotificationIndex = notifications.indexOfFirst { it.id == id }
         if (originalNotificationIndex != -1) {

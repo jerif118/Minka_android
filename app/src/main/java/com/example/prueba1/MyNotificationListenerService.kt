@@ -96,6 +96,12 @@ class MyNotificationListenerService : NotificationListenerService() {
         val extras = sbn.notification.extras
         val title  = extras.getString("android.title")
         val text   = extras.getCharSequence("android.text")?.toString()
+        val appLbl = getApplicationName(packageManager, sbn.packageName)
+
+        Log.d("NotificationListener", "📨 NOTIFICACIÓN CRUDA RECIBIDA de [$appLbl]")
+        Log.d("NotificationListener", "    Título: $title")
+        Log.d("NotificationListener", "   Texto: $text")
+
         // Validación de títulos permitidos por paquete, si existe filtro
         val filters = titleFilters[sbn.packageName]
         if (filters != null) {
@@ -108,11 +114,12 @@ class MyNotificationListenerService : NotificationListenerService() {
             val textLower = text?.lowercase() ?: ""
             if (!contentPattern.matcher(textLower).find()) return
         }
-        val appLbl = getApplicationName(packageManager, sbn.packageName)
+        //val appLbl = getApplicationName(packageManager, sbn.packageName)
 
         // 3) Parsear para extraer monto y remitente
         val (amount, sender) = parseNotificationContent(sbn.packageName, title, text)
 
+        val parsedData = parseNotificationContent(sbn.packageName, title, text)
         // 4) Crear un NotificationData con los datos extraídos
         val n = NotificationData(
             id          = sbn.key,
@@ -122,11 +129,13 @@ class MyNotificationListenerService : NotificationListenerService() {
             packageName = sbn.packageName,
             date        = sbn.postTime,
             amount      = amount,
-            senderName  = sender
+            senderName  = sender,
+            securityCode = parsedData.securityCode
         )
 
         // 5) Enviar al ViewModel
         notificationListener?.invoke(n)
+        Log.d("NotificationListener", "➡️ PAYLOAD A ENVIAR: $n")
         //enviar websocket
         WebSocketManager.sendNotification(n)
 
@@ -137,12 +146,19 @@ class MyNotificationListenerService : NotificationListenerService() {
         Log.d("NotificationListener", "→ Monto: $amount, Remitente: $sender")
     }
 
+    private data class ParsedResult(
+        val amount: Double,
+        val sender: String,
+        val securityCode: String? = null // Nullable, porque no siempre estará presente
+    )
+
     /* ───────────── Parser de notificaciones ───────────── */
 
-    private fun parseNotificationContent(packageName: String, title: String?, text: String?): Pair<Double, String> {
+    private fun parseNotificationContent(packageName: String, title: String?, text: String?): ParsedResult {
         // Valores por defecto
         var amount = 0.0
         var sender = "Desconocido"
+        var securityCode: String? = null // NUEVO: Variable para el código de seguridad
 
         val fullText = "$title $text".lowercase()
 
@@ -185,24 +201,32 @@ class MyNotificationListenerService : NotificationListenerService() {
 
                 }
                 "com.bcp.innovacxion.yapeapp" -> { // Yape
-                    // Extract sender, amount, and optional security code from Yape notifications
                     val body = text ?: ""
-
-                    // Combined pattern: optional "Yape!" prefix, sender, amount, and optional code
-                    val pattern = Pattern.compile(
-                        "(?:yape!?\\s*)?(.+?)\\s+te envió un pago por\\s*s/\\s*([0-9]+(?:[.,][0-9]{1,2})?)(?:.*?c[oó]d(?:\\.o)?\\s*de seguridad\\s*(?:es)?[: ]*([0-9]+))?",
+                    val patternWithCode = Pattern.compile(
+                        "(.+?)\\s+te envió un pago por\\s*s/\\s*([0-9]+(?:[.,][0-9]{1,2})?).*?c[oó]d\\.?\\s*de seguridad\\s*(?:es)?[: ]*([0-9]+)",
                         Pattern.CASE_INSENSITIVE
                     )
-                    val matcher = pattern.matcher(body)
+                    var matcher = patternWithCode.matcher(body)
+
                     if (matcher.find()) {
-                        // Sender name
-                        sender = matcher.group(1).trim()
-                        // Amount
-                        amount = matcher.group(2).replace(",", ".").toDoubleOrNull() ?: amount
-                        // Security code, if present
-                        val codeGroup = matcher.group(3)
-                        if (!codeGroup.isNullOrBlank()) {
-                            sender = "$sender (Código: ${codeGroup.trim()})"
+                        Log.d("NotificationParser", "Yape: Patrón CON código encontrado.")
+                        sender = matcher.group(1)?.trim() ?: "Desconocido"
+                        amount = matcher.group(2)?.replace(",",".")?.toDoubleOrNull() ?: 0.0
+                        // ¡AQUÍ ESTÁ LA MAGIA! Guardamos el código en su propia variable
+                        securityCode = matcher.group(3)?.trim()
+                        // YA NO es necesario modificar el 'sender'. Lo dejamos limpio.
+                        // sender = "$sender (CÓDIGO: $securityCode)" // <--- LÍNEA ELIMINADA
+
+                    } else {
+                        Log.d("NotificationParser", "Yape: Patrón CON código no encontrado. Intentando patrón SIN código.")
+                        val patternWithoutCode = Pattern.compile(
+                            "(.+?)\\s+te envió un pago por\\s*s/\\s*([0-9]+(?:[.,][0-9]{1,2})?)",
+                            Pattern.CASE_INSENSITIVE
+                        )
+                        matcher = patternWithoutCode.matcher(body)
+                        if (matcher.find()) {
+                            sender = matcher.group(1)?.trim() ?: "Desconocido"
+                            amount = matcher.group(2)?.replace(",",".")?.toDoubleOrNull() ?: 0.0
                         }
                     }
                 }
@@ -235,8 +259,9 @@ class MyNotificationListenerService : NotificationListenerService() {
         }
 
         // Convert sender name to all uppercase
+        //return Pair(amount, sender)
         sender = sender.uppercase()
-        return Pair(amount, sender)
+        return ParsedResult(amount, sender, securityCode)
     }
 
     /* ───────────── Utilidades y persistencia ───────────── */

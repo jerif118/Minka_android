@@ -14,6 +14,9 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKeys
+
 /**
  * Gestiona la lógica de mensajes y la estrategia de reconexión del WebSocket.
  */
@@ -76,6 +79,17 @@ object WebSocketManager {
         isManualShutdown = true
     }
 
+    private fun getSecurePrefs(context: Context): android.content.SharedPreferences {
+        val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+        return EncryptedSharedPreferences.create(
+            PREFS_NAME, // Puedes usar el mismo nombre de archivo
+            masterKeyAlias,
+            context,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
     // --- LISTENER PRINCIPAL DEL WEBSOCKET ---
     fun listener(ctx: Context) = object : WebSocketListener() {
 
@@ -95,6 +109,27 @@ object WebSocketManager {
             if (!jsonElem.isJsonObject) { Log.w(TAG, "Mensaje no es un JSON Object."); return }
             val obj = jsonElem.asJsonObject
 
+            // Función anidada para guardar el token de forma segura
+            fun saveToken(token: String?) {
+                if (token == null) return
+                try {
+                    val securePrefs = getSecurePrefs(ctx) // <-- Obtenemos la instancia segura
+                    securePrefs.edit()
+                        .putString("jwt_token", token)
+                        .apply() // Se guarda el token
+
+                    // <-- MENSAJE DE CONFIRMACIÓN
+                    Log.i(TAG, "Token guardado/actualizado de forma segura.")
+
+                    // <-- LÍNEA NUEVA PARA VERIFICAR EL TOKEN GUARDADO
+                    //val retrievedToken = securePrefs.getString("jwt_token", null)
+                    //Log.d(TAG, "Token recuperado para verificación: $retrievedToken")
+
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error al guardar el token de forma segura.", e)
+                }
+            }
+
             if (obj.has("code") && obj.get("code").asString == "ROOM_FULL") {
                 Log.w(ROOM_FULL_RETRY_TAG, "-> ¡RECHAZO! El servidor respondió con 'ROOM_FULL'.")
                 isClosingForRoomFull = true
@@ -103,9 +138,11 @@ object WebSocketManager {
             }
 
             // Lógica para conexión exitosa (joined/room_created)
-            // Lógica para conexión exitosa (joined/room_created)
             if (obj.has("room_created") || (obj.has("event") && obj.get("event").asString == "joined")) {
                 Log.i(TAG, "✅ El servidor confirmó la unión. La sesión es válida. Reseteando todos los contadores de reintentos.")
+
+                // Extraer y guardar el token de forma segura
+                saveToken(obj.get("jwt_token")?.asString)
 
                 roomFullRetryCount = 0
                 roomFullRetryJob?.cancel()
@@ -125,6 +162,15 @@ object WebSocketManager {
                     } catch (e: Exception) { Log.e(TAG, "Error al enviar mensaje de reconexión.", e) }
                     isReconnecting = false
                 }
+                return
+            }
+
+            // Bloque para manejar la actualización del token
+            if (obj.has("event") && obj.get("event").asString == "token_actualizado") {
+                Log.i(TAG, "El servidor ha enviado un token actualizado.")
+
+                // Extraer y guardar el nuevo token de forma segura
+                saveToken(obj.get("jwt_token")?.asString)
                 return
             }
 
@@ -267,6 +313,10 @@ object WebSocketManager {
             return false
         }
         val jsonPayload = gson.toJson(mapOf("message" to notification))
+
+        // ▼ LÍNEA AGREGADA PARA VER EL PAYLOAD ▼
+        Log.d(TAG, "Payload JSON a enviar: $jsonPayload")
+
         Log.d(TAG, "↑ ENVIANDO MENSAJE AL SERVIDOR: ${notification.title}")
         return s.send(jsonPayload)
     }

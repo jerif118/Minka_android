@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.prueba1.NotificationCard
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate

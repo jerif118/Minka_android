@@ -9,7 +9,8 @@ data class NotificationData(
     val date: Long = System.currentTimeMillis(),
     val amount: Double = 0.0,
     val senderName: String = "Desconocido",
-    val message: String? = null
+    val message: String? = null,
+    val securityCode: String? = null
 ) {
     /**
      * Secondary constructor for simple info messages (e.g., Doze mode notifications).
@@ -23,6 +24,7 @@ data class NotificationData(
         date = System.currentTimeMillis(),
         amount = 0.0,
         senderName = "Desconocido",
-        message = null
+        message = null,
+        //cod_seguridad = null
     )
 }
