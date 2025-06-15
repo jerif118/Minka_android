@@ -43,8 +43,9 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import androidx.compose.material.icons.filled.Build
-import java.util.*
 import com.minka.app.UiEvent
+import androidx.compose.runtime.LaunchedEffect
+
 
 class NotificationUI {
 
@@ -435,6 +436,11 @@ fun NotificationScreen(vm: NotificationViewModel) {
                     // No se necesita ninguna acción para otros eventos.
                 }
             }
+        }
+    }
+    LaunchedEffect(vm.filteredNotifications.size) {
+        if (vm.filteredNotifications.isNotEmpty()) {
+            listState.animateScrollToItem(0)          // usa animateScrollToItem(0) si quieres animado
         }
     }
 

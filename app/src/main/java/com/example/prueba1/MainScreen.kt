@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
@@ -77,6 +78,7 @@ fun MainScreen(
     val currentBackStack by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStack?.destination?.route
     val showFilters = remember { mutableStateOf(false) }
+    val selectedPackage = remember { mutableStateOf<String?>(null) }
     val isLoading by vm.isLoading.collectAsState()
     val connectionStatus by vm.connectionStatus.collectAsState()
 
@@ -92,11 +94,6 @@ fun MainScreen(
                                     text = "Chekealo.ya",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "User (Daniel sanchez)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         },
@@ -235,17 +232,35 @@ fun MainScreen(
                                         } catch (_: Exception) { null }
 
                                         if (icon != null) {
-                                            Image(
-                                                bitmap = icon,
-                                                contentDescription = appName,
+                                            Box(
                                                 modifier = Modifier
                                                     .size(48.dp)
                                                     .clip(CircleShape)
+                                                    .background(
+                                                        if (selectedPackage.value == packageName)
+                                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.40f)
+                                                        else
+                                                            Color.Transparent
+                                                    )
                                                     .clickable {
-                                                        vm.applyFilter(packageName)
-                                                        showFilters.value = false
+                                                        if (selectedPackage.value == packageName) {
+                                                            // Ya estaba seleccionado ⇒ desmarcar
+                                                            selectedPackage.value = null
+                                                            vm.applyFilter(null)
+                                                        } else {
+                                                            // Seleccionar nuevo filtro
+                                                            selectedPackage.value = packageName
+                                                            vm.applyFilter(packageName)
+                                                            showFilters.value = false       // cierra lista
+                                                        }
                                                     }
-                                            )
+                                            ) {
+                                                Image(
+                                                    bitmap = icon,
+                                                    contentDescription = appName,
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -255,6 +270,7 @@ fun MainScreen(
                             onClick = {
                                 showFilters.value = !showFilters.value
                                 if (!showFilters.value) vm.applyFilter(null)
+                                if (!showFilters.value) selectedPackage.value = null
                             },
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
