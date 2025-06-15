@@ -2,7 +2,6 @@ package com.minka.app
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -10,23 +9,18 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Note
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Tune
@@ -35,28 +29,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.prueba1.ui.theme.Prueba1Theme
-import kotlinx.coroutines.delay
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.*
-import kotlinx.coroutines.launch
 
 import androidx.compose.material.icons.filled.*
 import com.example.prueba1.NotificationScreen
@@ -212,12 +195,18 @@ fun MainScreen(
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
                                 color = MaterialTheme.colorScheme.secondaryContainer,
-                                tonalElevation = 6.dp,
-                                shadowElevation = 8.dp,
+                                tonalElevation = 0.dp,
+                                shadowElevation = 0.dp,
                                 modifier = Modifier
                                     .width(56.dp)
                                     .padding(bottom = 8.dp)
                                     .align(Alignment.CenterHorizontally)
+                                    .animateContentSize(
+                                        animationSpec = tween(
+                                            durationMillis = 250,
+                                            easing = FastOutSlowInEasing
+                                        )
+                                    )
                             ) {
                                 Column(
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -230,35 +219,30 @@ fun MainScreen(
                                         val icon = try {
                                             pm.getApplicationIcon(packageName).toBitmap().asImageBitmap()
                                         } catch (_: Exception) { null }
-
                                         if (icon != null) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(48.dp)
-                                                    .clip(CircleShape)
-                                                    .background(
-                                                        if (selectedPackage.value == packageName)
-                                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.40f)
-                                                        else
-                                                            Color.Transparent
-                                                    )
-                                                    .clickable {
-                                                        if (selectedPackage.value == packageName) {
-                                                            // Ya estaba seleccionado ⇒ desmarcar
-                                                            selectedPackage.value = null
-                                                            vm.applyFilter(null)
-                                                        } else {
-                                                            // Seleccionar nuevo filtro
-                                                            selectedPackage.value = packageName
-                                                            vm.applyFilter(packageName)
-                                                            showFilters.value = false       // cierra lista
-                                                        }
-                                                    }
+                                            // Animar la aparición / desaparición de cada icono
+                                            AnimatedVisibility(
+                                                visible = selectedPackage.value == null || selectedPackage.value == packageName,
+                                                enter = fadeIn(animationSpec = tween(180)) + scaleIn(animationSpec = tween(180)),
+                                                exit  = fadeOut(animationSpec = tween(180)) + scaleOut(animationSpec = tween(180))
                                             ) {
                                                 Image(
                                                     bitmap = icon,
                                                     contentDescription = appName,
-                                                    modifier = Modifier.fillMaxSize()
+                                                    modifier = Modifier
+                                                        .size(48.dp)
+                                                        .clip(CircleShape)
+                                                        .clickable {
+                                                            if (selectedPackage.value == packageName) {
+                                                                // Des‑seleccionar → mostrar todos
+                                                                selectedPackage.value = null
+                                                                vm.applyFilter(null)
+                                                            } else {
+                                                                // Seleccionar este paquete → aplicar filtro
+                                                                selectedPackage.value = packageName
+                                                                vm.applyFilter(packageName)
+                                                            }
+                                                        }
                                                 )
                                             }
                                         }
