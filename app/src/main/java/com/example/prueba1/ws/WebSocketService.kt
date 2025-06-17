@@ -233,7 +233,7 @@ class WebSocketService : Service() {
                     settings[devicesKey] = current
                 }
             }
-            val url = "ws://$host/ws?action=join&client_id=$clientId&room_id=$roomId&password=$password"
+            val url = "wss://$host/ws?action=join&client_id=$clientId&room_id=$roomId&password=$password"
             //val url = "ws://$host/ws?client_id=$clientId&action=join&room_id=$roomId&password=$password"
             val req = Request.Builder().url(url).build()
             socket = client.newWebSocket(req, WebSocketManager.listener(this))
