@@ -1,16 +1,11 @@
 package com.example.prueba1
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,15 +15,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.Note
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Note
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material3.*
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,11 +43,9 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import androidx.compose.material.icons.rounded.Construction   // modern replacement for Build
+import androidx.compose.material.icons.filled.Build
+import java.util.*
 import com.minka.app.UiEvent
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.saveable.rememberSaveable
-
 
 class NotificationUI {
 
@@ -70,34 +60,35 @@ fun FilterBar(
     val context = LocalContext.current
     val pm = context.packageManager
 
-    NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 0.dp,
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 3.dp,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
         modifier = modifier
             .fillMaxWidth()
-            .height(80.dp)
-            .clip(MaterialTheme.shapes.large)   // 28‑dp corners (Expressive)
+            .height(64.dp)
     ) {
-        apps.forEach { (appName, packageName) ->
-            val icon = runCatching {
-                pm.getApplicationIcon(packageName).toBitmap().asImageBitmap()
-            }.getOrNull()
-
-            if (icon != null) {
-                NavigationBarItem(
-                    icon = {
-                        Image(
-                            bitmap = icon,
-                            contentDescription = appName,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    },
-                    selected = false,
-                    onClick = { onFilterSelected(packageName) },
-                    colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = MaterialTheme.colorScheme.primaryContainer
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            items(apps) { (appName, packageName) ->
+                val icon = try {
+                    pm.getApplicationIcon(packageName).toBitmap().asImageBitmap()
+                } catch (_: Exception) {
+                    null
+                }
+                if (icon != null) {
+                    Image(
+                        bitmap = icon,
+                        contentDescription = appName,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .clickable { onFilterSelected(packageName) }
                     )
-                )
+                }
             }
         }
     }
@@ -106,8 +97,8 @@ fun FilterBar(
 @Composable
 fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
     var isEditing by remember { mutableStateOf(false) }
-    val MAX_NOTE_LEN = 250
-    var editedMessage by rememberSaveable(n.id) { mutableStateOf(n.message ?: "") }
+    var editedMessage by remember { mutableStateOf(n.message ?: "") }
+    var showFullMessage by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showConfirmEmptyNoteDialog by remember { mutableStateOf(false) }
 
@@ -117,6 +108,16 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
     val blinkColor = MaterialTheme.colorScheme.primary
     val blinkProgress = remember { Animatable(0f) }
     val animatedBorderColor = lerp(start = Color.Transparent, stop = blinkColor, fraction = blinkProgress.value)
+
+    val expandedBorderColor = MaterialTheme.colorScheme.secondary // <-- El rosado fuerte
+
+    val finalBorderColor = if (showFullMessage) {
+        // Si la nota está expandida, usamos el color rosado
+        expandedBorderColor
+    } else {
+        // Si no, usamos el color de la animación de parpadeo que ya existía
+        animatedBorderColor
+    }
 
     val messageAtLastBlink = remember { mutableStateOf(n.message) }
 
@@ -142,22 +143,24 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
             .format(Instant.ofEpochMilli(n.date).atZone(ZoneId.systemDefault()))
     }
 
+    val fecha = remember(n.date) {
+        DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.getDefault())
+            .format(Instant.ofEpochMilli(n.date).atZone(ZoneId.systemDefault()))
+    }
+
     val isNew = remember(n.date) {
         (System.currentTimeMillis() - n.date) < (15 * 60 * 1000L)
     }
 
     // --- INICIO DE LA MODIFICACIÓN ---
     // NUEVO: Este LaunchedEffect se encarga del parpadeo de 2 segundos para las NUEVAS notificaciones.
-    LaunchedEffect(key1 = n.id) { // La clave es el ID para que se ejecute solo una vez por notificación
+    LaunchedEffect(key1 = n.id) {
         if (isNew) {
-            // Repetimos el parpadeo 2 veces para que dure aproximadamente 2 segundos.
             repeat(2) {
-                // El borde aparece
                 blinkProgress.animateTo(
                     targetValue = 1f,
                     animationSpec = tween(durationMillis = 500) // 0.5 segundos
                 )
-                // El borde desaparece
                 blinkProgress.animateTo(
                     targetValue = 0f,
                     animationSpec = tween(durationMillis = 500) // 0.5 segundos
@@ -181,13 +184,14 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
     val primaryTextColor = MaterialTheme.colorScheme.primary
     val secondaryTextColor = MaterialTheme.colorScheme.secondary
 
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = backgroundColor,
-        tonalElevation = 1.dp,
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .animateContentSize()
+            .border(
+                width = 2.dp,
+                color = animatedBorderColor,
+                shape = MaterialTheme.shapes.medium
+            )
     ) {
         Row(
             modifier = Modifier
@@ -218,7 +222,7 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Rounded.Construction,
+                        imageVector = Icons.Default.Build,
                         contentDescription = n.appName,
                         modifier = Modifier.size(48.dp),
                         tint = MaterialTheme.colorScheme.outline
@@ -259,29 +263,24 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    IconButton(
-                        onClick = {
-                            if (isEditing) {
-                                if (editedMessage.length > MAX_NOTE_LEN) {
-                                    // Do nothing or show a Toast/snackbar in future
-                                } else if (editedMessage.trim().isEmpty()) {
-                                    showConfirmEmptyNoteDialog = true
-                                } else {
-                                    vm.updateNotificationMessage(n.id, editedMessage.trim())
-                                    isEditing = false
-                                }
+                    IconButton(onClick = {
+                        if (isEditing) {
+                            if (editedMessage.trim().isEmpty()) {
+                                showConfirmEmptyNoteDialog = true
                             } else {
-                                editedMessage = n.message ?: ""
-                                isEditing = true
+                                vm.updateNotificationMessage(n.id, editedMessage.trim())
+                                isEditing = false
                             }
-                        },
-                        enabled = !(isEditing && editedMessage.length > MAX_NOTE_LEN),
-                    ) {
+                        } else {
+                            editedMessage = n.message ?: ""
+                            isEditing = true
+                        }
+                    }) {
                         Icon(
                             imageVector = when {
-                                isEditing -> Icons.Rounded.Check
-                                n.message?.isNotBlank() == true -> Icons.Rounded.Note
-                                else -> Icons.Rounded.Edit
+                                isEditing -> Icons.Default.Check
+                                n.message?.isNotBlank() == true -> Icons.Default.Note
+                                else -> Icons.Default.Edit
                             },
                             contentDescription = if (isEditing) "Guardar nota" else "Editar nota",
                             tint = primaryTextColor
@@ -289,7 +288,7 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(2.dp))
 
                 Text(
                     "De: ${n.senderName}",
@@ -306,76 +305,121 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
                 ) {
                     Text(
                         "S/ %.2f".format(n.amount),
-                        style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
                         color = primaryTextColor
                     )
-                    Text(
-                        "HORA: $hora",
-                        style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
-                        color = secondaryTextColor
-                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        // --- NUEVO: Fila para el ícono y la fecha ---
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarToday,
+                                contentDescription = "Fecha",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = fecha,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        Text(
+                            "HORA: $hora",
+                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(6.dp))
 
                 if (isEditing) {
-                    TextField(
+                    OutlinedTextField(
                         value = editedMessage,
                         onValueChange = { editedMessage = it },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.medium)
+                            .padding(vertical = 0.dp)
                             .focusRequester(focusRequester),
-                        placeholder = { Text("Escribe tu nota") },
+                        label = { Text("Escribe tu nota") },
                         maxLines = 4,
-                        supportingText = {
-                            Text("${editedMessage.length} / $MAX_NOTE_LEN")
-                        },
-                        isError = editedMessage.length > MAX_NOTE_LEN,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor   = MaterialTheme.colorScheme.surfaceVariant,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            errorContainerColor     = MaterialTheme.colorScheme.errorContainer,
-                            cursorColor             = MaterialTheme.colorScheme.primary,
-                            focusedLabelColor       = MaterialTheme.colorScheme.primary,
-                            errorLabelColor         = MaterialTheme.colorScheme.error
-                        ),
-                        shape = MaterialTheme.shapes.medium
+                        textStyle = MaterialTheme.typography.bodyMedium,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
+                                alpha = 0.3f
+                            ),
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            cursorColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     )
                 } else if (n.message?.isNotBlank() == true) {
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = fadeIn(
-                            animationSpec = tween(180)
-                        ) + expandVertically(
-                            animationSpec = tween(240, easing = FastOutSlowInEasing)
-                        ),
-                        exit = fadeOut(
-                            animationSpec = tween(180)
-                        ) + shrinkVertically(
-                            animationSpec = tween(240, easing = FastOutSlowInEasing)
-                        )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showFullMessage = !showFullMessage }
+                            .padding(vertical = 2.dp)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .animateContentSize()
-                        ) {
+                        if (showFullMessage) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(
+                                        width = 2.dp, // Grosor fijo
+                                        color = Color(0xFFB81D57),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .padding(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Nota:",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    IconButton(
+                                        onClick = { showDeleteDialog = true },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Eliminar nota",
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = n.message,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
+                        } else {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.Top
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Nota:",
+                                    text = "Nota: ",
                                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = secondaryTextColor
+                                    color = MaterialTheme.colorScheme.onSurface // <-- CAMBIO 2
                                 )
-                                Spacer(Modifier.width(6.dp))
                                 Text(
                                     text = n.message,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    modifier = Modifier.weight(1f)
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -388,6 +432,7 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
         ConfirmDeleteDialog(
             onConfirm = {
                 vm.clearNotificationNote(n.id)
+                showFullMessage = false
                 showDeleteDialog = false
             },
             onDismiss = { showDeleteDialog = false }
@@ -398,6 +443,7 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
             onConfirm = {
                 vm.updateNotificationMessage(n.id, editedMessage.trim())
                 isEditing = false
+                showFullMessage = false
                 showConfirmEmptyNoteDialog = false
             },
             onDismiss = { showConfirmEmptyNoteDialog = false }
@@ -433,17 +479,13 @@ fun NotificationScreen(vm: NotificationViewModel) {
             }
         }
     }
-    LaunchedEffect(vm.filteredNotifications.size) {
-        if (vm.filteredNotifications.isNotEmpty()) {
-            listState.animateScrollToItem(0)          // usa animateScrollToItem(0) si quieres animado
-        }
-    }
 
     LazyColumn(
         state = listState, // Se asigna el estado a la lista
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.outlineVariant)
+            //.background(MaterialTheme.colorScheme.outlineVariant)
+            //.background(Color.White)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
