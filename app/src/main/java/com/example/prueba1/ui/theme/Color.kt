@@ -12,24 +12,29 @@ val Magenta40      = Color(0xFFB81D57)
 val Magenta80      = Color(0xFFFFB1CA)
 val Neutral10      = Color(0xFF141414)  // casi negro
 val Neutral98      = Color(0xFFFAFAFA)  // casi blanco
+val MiFondoClaro   = Color(0xFFFFFBF5)
+val Teal40 = Color(0xFF006A6A)
+val Teal80 = Color(0xFF5DD5D5)
 
 /* ─────────────────── COMPLETE SCHEMES (light / dark) ────────────────── */
 
 // 1) PALETA PARA MODO CLARO
 val LightColors = lightColorScheme(
+    background           = Color.White,
+    surface              = Color.White,
     primary              = Blue40,
     onPrimary            = Color.White,
     primaryContainer     = Blue80,
     onPrimaryContainer   = Neutral10,
 
-    secondary            = Magenta40,
+    secondary            = Blue80,
     onSecondary          = Color.White,
-    secondaryContainer   = Magenta80,
+    secondaryContainer   = Blue80,
     onSecondaryContainer = Neutral10,
 
-    background           = Neutral98,
+    //background           = Neutral98,
     onBackground         = Neutral10,
-    surface              = Neutral98,
+    //surface              = Neutral98,
     onSurface            = Neutral10,
 
     error                = Color(0xFFB00020),
@@ -44,10 +49,10 @@ val DarkColors = darkColorScheme(
     primaryContainer     = Blue40,
     onPrimaryContainer   = Blue80,
 
-    secondary            = Magenta80,
-    onSecondary          = Magenta40,
-    secondaryContainer   = Magenta40,
-    onSecondaryContainer = Magenta80,
+    secondary            = Blue40,
+    onSecondary          = Blue40,
+    secondaryContainer   = Blue40,
+    onSecondaryContainer = Blue80,
 
     background           = Neutral10,
     onBackground         = Neutral98,

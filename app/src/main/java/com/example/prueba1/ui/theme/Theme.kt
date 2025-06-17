@@ -16,7 +16,8 @@ import com.example.prueba1.ui.theme.DarkColors
 @Composable
 fun Prueba1Theme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
+    //dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     // Seleccionamos la paleta dinámica si Android >= 12 y dynamicColor == true.

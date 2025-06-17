@@ -228,8 +228,8 @@ class MainActivity : ComponentActivity() {
                             this@MainActivity,
                             WebSocketService::class.java
                         ).apply {
-                            //putExtra("host", "192.168.18.20:5001")
                             putExtra("host", "192.168.18.20:5001")
+                            //putExtra("host", "ws.checkealoya.com")
                             putExtra("clientId", clientId)
                             putExtra("roomId", info.room_id)
                             putExtra("password", info.password)

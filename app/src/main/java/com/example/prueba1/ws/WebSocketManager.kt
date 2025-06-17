@@ -214,7 +214,7 @@ object WebSocketManager {
         }
 
         override fun onFailure(ws: WebSocket, t: Throwable, resp: Response?) {
-            Log.e(TAG, "💥 FALLO DE CONEXIÓN: ${t.javaClass.simpleName} - ${t.message}", t)
+            Log.e(TAG, "FALLO DE CONEXIÓN: ${t.javaClass.simpleName} - ${t.message}", t)
 
             if (isManualShutdown) {
                 isManualShutdown = false // Reseteamos la bandera
@@ -248,7 +248,7 @@ object WebSocketManager {
             }
 
             if (delayMillis == -1L) {
-                Log.e(TAG, "❌ LÍMITE DE REINTENTOS GENERALES ($MAX_GENERAL_RETRIES) ALCANZADO. Rindiéndose.")
+                Log.e(TAG, "LÍMITE DE REINTENTOS GENERALES ($MAX_GENERAL_RETRIES) ALCANZADO. Rindiéndose.")
                 generalRetryCount = 0
                 return@launch
             }
@@ -278,7 +278,7 @@ object WebSocketManager {
             // Si el número de reintentos supera el máximo, nos rendimos.
             // Con MAX = 2, se rendirá cuando roomFullRetryCount llegue a 3.
             if (roomFullRetryCount > MAX_ROOM_FULL_RETRIES) {
-                Log.e(ROOM_FULL_RETRY_TAG, "❌ LÍMITE DE REINTENTOS ($MAX_ROOM_FULL_RETRIES) para ROOM_FULL alcanzado. Rindiéndose.")
+                Log.e(ROOM_FULL_RETRY_TAG, "LÍMITE DE REINTENTOS ($MAX_ROOM_FULL_RETRIES) para ROOM_FULL alcanzado. Rindiéndose.")
                 LocalBroadcastManager.getInstance(ctx).sendBroadcast(Intent(WebSocketService.ACTION_SESSION_ENDED))
                 roomFullRetryCount = 0 // Reseteamos para el futuro
                 return@launch
