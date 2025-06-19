@@ -38,6 +38,8 @@ import okhttp3.RequestBody
 import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKeys
 
 class WebSocketService : Service() {
 
@@ -196,6 +198,18 @@ class WebSocketService : Service() {
         socket = null
     }
 
+    // Agrega una función para obtener las preferencias seguras
+    private fun getSecurePrefs(): android.content.SharedPreferences {
+        val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+        return EncryptedSharedPreferences.create(
+            "ws_prefs", // El mismo nombre de archivo que usas en WebSocketManager
+            masterKeyAlias,
+            applicationContext,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
     private fun openSocket() {
         synchronized(socketLock) {
             if (socket != null) {
@@ -204,26 +218,38 @@ class WebSocketService : Service() {
             }
 
             val host = prefs.getString("host", null) ?: return
-            //val clientId = prefs.getString("clientId", null) ?: return
-            //val roomId = prefs.getString("roomId", null) ?: return
-            //val password = prefs.getString("password", null) ?: return
-
-            // El operador "?." (safe call) asegura que .trim() solo se llama si el string no es nulo.
             val clientId = prefs.getString("clientId", null)?.trim() ?: return
             val roomId = prefs.getString("roomId", null)?.trim() ?: return
             val password = prefs.getString("password", null)?.trim() ?: return
 
-            // --- LÍNEA DE LOG AÑADIDA ---
-            // Aquí mostramos en Logcat los datos que se usarán para la conexión.
+            val securePrefs = getSecurePrefs()
+            val jwtToken = securePrefs.getString("jwt_token", null) // <-- Recupera el token guardado
+
+            val connectionType: String
+            val url: String
+
+            if (jwtToken != null) {
+                connectionType = "RECONEXIÓN (usando JWT Token)"
+                url = "wss://$host/ws?action=reconnect&client_id=$clientId&room_id=$roomId&jwt_token=$jwtToken"
+            } else {
+                val password = prefs.getString("password", null)?.trim() ?: run {
+                    Log.e("WebSocketService", "ERROR: No hay JWT Token ni contraseña para la conexión inicial.")
+                    return // No podemos conectar sin token ni password
+                }
+                connectionType = "PRIMERA CONEXIÓN (usando Contraseña)"
+                url = "wss://$host/ws?action=join&client_id=$clientId&room_id=$roomId&password=$password"
+            }
+
             Log.i("WebSocketService", """
-                Conectando con los siguientes datos:
+                Conectando al servidor [$connectionType]:
+                - Host:      $host
                 - Client ID: $clientId
                 - Room ID:   $roomId
-                - Password:  $password 
+                - Password:  $password
+                - Token JWT: ${jwtToken?.take(10)}...${jwtToken?.takeLast(10)} (truncated)
             """.trimIndent())
-            // --- FIN DE LA LÍNEA AÑADIDA ---
 
-            Log.i("WebSocketService", "INTENTANDO ABRIR NUEVA CONEXIÓN WEBSOCKET...")
+            Log.i("WebSocketService", "INTENTANDO ABRIR NUEVA CONEXIÓN WEBSOCKET a: $url")
 
             val devicesKey = stringSetPreferencesKey("linked_devices")
             CoroutineScope(Dispatchers.IO).launch {
@@ -233,8 +259,7 @@ class WebSocketService : Service() {
                     settings[devicesKey] = current
                 }
             }
-            val url = "wss://$host/ws?action=join&client_id=$clientId&room_id=$roomId&password=$password"
-             // cuando no existe wss val url = "ws://$host/ws?client_id=$clientId&action=join&room_id=$roomId&password=$password"
+
             val req = Request.Builder().url(url).build()
             socket = client.newWebSocket(req, WebSocketManager.listener(this))
             WebSocketManager.updateSocket(socket)

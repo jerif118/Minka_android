@@ -149,6 +149,18 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Al iniciar la aplicación (o al recrearse la actividad),
+        // asegúrate de que el WebSocketService esté corriendo e intente conectar.
+        // Esto forzará una actualización de estado si se conecta exitosamente.
+        val svc = Intent(this, WebSocketService::class.java).apply {
+            // No necesitas pasar los extras si ya están guardados en SharedPreferences,
+            // que es lo que parece estar sucediendo cuando se lee el QR.
+            // Si necesitas forzar una reconexión incluso sin el QR, asegúrate que
+            // los prefs "host", "clientId", "roomId", "password" no sean null.
+        }
+        startService(svc) // Inicia (o re-inicia) el servicio para asegurar el intento de conexión.
+
+
         setContent {
             Prueba1Theme {
                 val nav = rememberNavController()

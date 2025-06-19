@@ -109,21 +109,26 @@ object WebSocketManager {
             if (!jsonElem.isJsonObject) { Log.w(TAG, "Mensaje no es un JSON Object."); return }
             val obj = jsonElem.asJsonObject
 
-            // Función anidada para guardar el token de forma segura
             fun saveToken(token: String?) {
-                if (token == null) return
+                if (token == null) {
+                    Log.e(TAG, "Intento de guardar un token nulo. Ignorando.")
+                    return
+                }
                 try {
                     val securePrefs = getSecurePrefs(ctx) // <-- Obtenemos la instancia segura
                     securePrefs.edit()
                         .putString("jwt_token", token)
                         .apply() // Se guarda el token
 
-                    // <-- MENSAJE DE CONFIRMACIÓN
                     Log.i(TAG, "Token guardado/actualizado de forma segura.")
 
-                    // <-- LÍNEA NUEVA PARA VERIFICAR EL TOKEN GUARDADO
-                    //val retrievedToken = securePrefs.getString("jwt_token", null)
-                    //Log.d(TAG, "Token recuperado para verificación: $retrievedToken")
+                    // !!! DESCOMENTA Y VERIFICA ESTA LÍNEA AL CORRER LA APP !!!
+                    val retrievedToken = securePrefs.getString("jwt_token", null)
+                    Log.d(TAG, "VERIFICACIÓN: Token recuperado INMEDIATAMENTE después de guardar: ${retrievedToken?.take(10)}...${retrievedToken?.takeLast(10)} (truncated)")
+                    if (retrievedToken == null) {
+                        Log.e(TAG, "!!! ADVERTENCIA CRÍTICA: El token fue guardado, pero no se pudo recuperar INMEDIATAMENTE. Puede haber un problema con EncryptedSharedPreferences. !!!")
+                    }
+
 
                 } catch (e: Exception) {
                     Log.e(TAG, "Error al guardar el token de forma segura.", e)
@@ -138,31 +143,44 @@ object WebSocketManager {
             }
 
             // Lógica para conexión exitosa (joined/room_created)
-            if (obj.has("room_created") || (obj.has("event") && obj.get("event").asString == "joined")) {
-                Log.i(TAG, "✅ El servidor confirmó la unión. La sesión es válida. Reseteando todos los contadores de reintentos.")
+            if (obj.has("event")) {
+                val event = obj.get("event").asString
+                when (event) {
+                    "jwt_updated", "token_actualizado" -> { // <-- Ahora captura ambos eventos
+                        Log.i(TAG, "El servidor ha enviado/actualizado un token JWT.")
+                        saveToken(obj.get("jwt_token")?.asString) //
+                        // No retornamos aquí para permitir que se procese 'joined_room' si viene inmediatamente después
+                    }
+                    "joined_room" -> { // El evento real que recibes cuando te unes.
+                        Log.i(TAG, "✅ El servidor confirmó la unión a la sala. La sesión es válida. Reseteando todos los contadores de reintentos.")
+                        // Asegurarse de que el token también se guarde si viene con este evento
+                        // Aunque tu log muestra que "jwt_updated" viene *antes*, es buena práctica
+                        // intentar guardarlo también aquí si lo incluye.
+                        saveToken(obj.get("jwt_token")?.asString) //
 
-                // Extraer y guardar el token de forma segura
-                saveToken(obj.get("jwt_token")?.asString)
+                        roomFullRetryCount = 0 //
+                        roomFullRetryJob?.cancel() //
+                        generalRetryCount = 0 //
+                        generalRetryJob?.cancel() //
 
-                roomFullRetryCount = 0
-                roomFullRetryJob?.cancel()
-                generalRetryCount = 0
-                generalRetryJob?.cancel()
 
-                if (isReconnecting) {
-                    Log.d(TAG, "Enviando evento 'client_reconnected' post-confirmación.")
-                    try {
-                        val prefs = ctx.getSharedPreferences("ws_prefs", Context.MODE_PRIVATE)
-                        val clientId = prefs.getString("clientId", "unknown")
-                        val reconnectPayload = mapOf(
-                            "event" to "client_reconnected", "clientId" to clientId,
-                            "message" to "El cliente $clientId se ha reconectado exitosamente."
-                        )
-                        ws.send(gson.toJson(reconnectPayload))
-                    } catch (e: Exception) { Log.e(TAG, "Error al enviar mensaje de reconexión.", e) }
-                    isReconnecting = false
+                        if (isReconnecting) { //
+                            Log.d(TAG, "Enviando evento 'client_reconnected' post-confirmación.") //
+                            try {
+                                val prefs = ctx.getSharedPreferences("ws_prefs", Context.MODE_PRIVATE) //
+                                val clientId = prefs.getString("clientId", "unknown") //
+                                val reconnectPayload = mapOf(
+                                    "event" to "client_reconnected", "clientId" to clientId,
+                                    "message" to "El cliente $clientId se ha reconectado exitosamente."
+                                )
+                                ws.send(gson.toJson(reconnectPayload)) //
+                            } catch (e: Exception) { Log.e(TAG, "Error al enviar mensaje de reconexión.", e) } //
+                            isReconnecting = false //
+                        }
+                        return //
+                    }
+                    // Puedes añadir otros eventos aquí si los necesitas
                 }
-                return
             }
 
             // Bloque para manejar la actualización del token
