@@ -25,6 +25,10 @@
 
     <!-- servicio en primer plano para tipo dataSync (API 34+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <!-- servicio en primer plano para sockets/IoT (API 34+) -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
+        tools:targetApi="34"/>
 
 
 
@@ -85,7 +89,9 @@
         <service
             android:name="com.example.prueba1.ws.WebSocketService"
             android:exported="false"
-            android:foregroundServiceType="dataSync"/>
+            android:stopWithTask="false"
+            android:foregroundServiceType="dataSync|connectedDevice"
+            tools:ignore="ForegroundServicePermission" />
 
         <!-- Reinicia el servicio tras BOOT_COMPLETED / LOCKED_BOOT_COMPLETED -->
         <receiver

@@ -146,6 +146,17 @@ object WebSocketManager {
             if (obj.has("event")) {
                 val event = obj.get("event").asString
                 when (event) {
+                    "reconnected" -> {
+                        Log.i(TAG, "✅ Reconexión confirmada por el servidor; cancelando reintentos pendientes.")
+                        // Reiniciamos/cancelamos todos los contadores y jobs de reintento
+                        roomFullRetryCount = 0
+                        roomFullRetryJob?.cancel()
+                        generalRetryCount = 0
+                        generalRetryJob?.cancel()
+                        isReconnecting = false
+                        // No necesitamos procesar nada más de este mensaje
+                        return
+                    }
                     "jwt_updated", "token_actualizado" -> { // <-- Ahora captura ambos eventos
                         Log.i(TAG, "El servidor ha enviado/actualizado un token JWT.")
                         saveToken(obj.get("jwt_token")?.asString) //

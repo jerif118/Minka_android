@@ -105,6 +105,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Arranca el WebSocketService solo si ya existen credenciales guardadas */
+    private fun ensureWebSocketServiceRunning() {
+        val prefs = getSharedPreferences("ws_prefs", Context.MODE_PRIVATE)
+        val host = prefs.getString("host", null)
+        val clientId = prefs.getString("clientId", null)
+        if (!host.isNullOrBlank() && !clientId.isNullOrBlank()) {
+            com.example.prueba1.ws.WebSocketService.requestReconnect(this)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -148,17 +158,6 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this, "Error: $errorMessage", Toast.LENGTH_SHORT).show()
             }
         }
-
-        // Al iniciar la aplicación (o al recrearse la actividad),
-        // asegúrate de que el WebSocketService esté corriendo e intente conectar.
-        // Esto forzará una actualización de estado si se conecta exitosamente.
-        val svc = Intent(this, WebSocketService::class.java).apply {
-            // No necesitas pasar los extras si ya están guardados en SharedPreferences,
-            // que es lo que parece estar sucediendo cuando se lee el QR.
-            // Si necesitas forzar una reconexión incluso sin el QR, asegúrate que
-            // los prefs "host", "clientId", "roomId", "password" no sean null.
-        }
-        startService(svc) // Inicia (o re-inicia) el servicio para asegurar el intento de conexión.
 
 
         setContent {
@@ -214,6 +213,11 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         LocalBroadcastManager.getInstance(this).unregisterReceiver(connectionStatusReceiver)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ensureWebSocketServiceRunning()   // solo cuando la app entra en foreground
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
