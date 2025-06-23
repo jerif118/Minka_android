@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DateRange
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.*
@@ -28,6 +29,10 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+
 
 // Asumo que estas clases y funciones existen en tu proyecto.
 // import com.minka.app.NotificationData
@@ -48,35 +53,67 @@ fun ResumenDeIngresosScreen(vm: NotificationViewModel) {
     val context = LocalContext.current
     // Scope para lanzar operaciones en segundo plano
     val coroutineScope = rememberCoroutineScope()
-
-    // --- ESTADOS ---
+    // --- ESTADOS (deben declararse antes de usarse en el launcher) ---
     var selectionMode by remember { mutableStateOf(DateSelectionMode.SINGLE) }
     var selectedSingleDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     var selectedDateRange by remember { mutableStateOf<Pair<LocalDate, LocalDate>?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
-    // Estado para mostrar/ocultar el indicador de carga
     var isExporting by remember { mutableStateOf(false) }
 
-    // --- LÓGICA DE FILTRADO ---
-    val notificaciones = when (selectionMode) {
-        DateSelectionMode.SINGLE -> {
-            vm.notifications.filter {
-                selectedSingleDate?.let { singleDate ->
-                    Instant.ofEpochMilli(it.date).atZone(ZoneId.systemDefault()).toLocalDate() == singleDate
-                } ?: false
+    // --- LÓGICA DE FILTRADO (se declara antes de saveExcelLauncher para que esté en scope) ---
+    val notificaciones by remember(
+        selectionMode,
+        selectedSingleDate,
+        selectedDateRange,
+        vm.notifications
+    ) {
+        mutableStateOf(
+            when (selectionMode) {
+                DateSelectionMode.SINGLE -> {
+                    vm.notifications.filter {
+                        selectedSingleDate?.let { singleDate ->
+                            Instant.ofEpochMilli(it.date).atZone(ZoneId.systemDefault()).toLocalDate() == singleDate
+                        } ?: false
+                    }
+                }
+                DateSelectionMode.MULTIPLE -> {
+                    vm.notifications.filter {
+                        selectedDateRange?.let { range ->
+                            val nDate = Instant.ofEpochMilli(it.date).atZone(ZoneId.systemDefault()).toLocalDate()
+                            !nDate.isBefore(range.first) && !nDate.isAfter(range.second)
+                        } ?: false
+                    }
+                }
+                DateSelectionMode.ALL -> vm.notifications
+            }.sortedByDescending { it.date }
+        )
+    }
+    // SAF launcher: el usuario elige dónde guardar el Excel
+    val saveExcelLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    ) { uri: Uri? ->
+        if (uri != null) {
+            coroutineScope.launch {
+                isExporting = true
+                val fileName = generateFileName(
+                    mode = selectionMode,
+                    singleDate = selectedSingleDate,
+                    dateRange = selectedDateRange
+                )
+                exportToExcel(
+                    context = context,
+                    notifications = notificaciones,
+                    fileName = fileName,
+                    targetUri = uri
+                )
+                isExporting = false
             }
         }
-            DateSelectionMode.MULTIPLE -> {
-                vm.notifications.filter {
-                    selectedDateRange?.let { range ->
-                        val notificationDate = Instant.ofEpochMilli(it.date).atZone(ZoneId.systemDefault()).toLocalDate()
-                        !notificationDate.isBefore(range.first) && !notificationDate.isAfter(range.second)
-                    } ?: false
-                }
-            }
-            DateSelectionMode.ALL -> vm.notifications
-        }.sortedByDescending { it.date
     }
+
+
 
     val totalAmount = notificaciones.sumOf { it.amount }
     val formattedTotal = String.format("%.2f", totalAmount)
@@ -94,21 +131,19 @@ fun ResumenDeIngresosScreen(vm: NotificationViewModel) {
                 },
                 actions = {
                     // --- SECCIÓN DE EXPORTACIÓN MODIFICADA ---
-                    Box {
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         IconButton(
                             onClick = {
-                                // Se inicia una corrutina para no bloquear la UI
-                                coroutineScope.launch {
-                                    isExporting = true
-                                    val fileName = generateFileName(
-                                        mode = selectionMode,
-                                        singleDate = selectedSingleDate,
-                                        dateRange = selectedDateRange
-                                    )
-                                    // Se llama a la función del archivo ExcelExporter.kt
-                                    exportToExcel(context, notificaciones, fileName)
-                                    isExporting = false
-                                }
+                                val fileName = generateFileName(
+                                    mode = selectionMode,
+                                    singleDate = selectedSingleDate,
+                                    dateRange = selectedDateRange
+                                )
+                                // Abre el SAF picker
+                                saveExcelLauncher.launch(fileName)
                             },
                             // El botón se deshabilita mientras se exporta
                             enabled = !isExporting
@@ -120,6 +155,49 @@ fun ResumenDeIngresosScreen(vm: NotificationViewModel) {
                             )
                         }
                         // Se muestra un indicador de progreso si se está exportando
+                        if (isExporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                    // --- BOTÓN PARA COMPARTIR DIRECTAMENTE ---
+                    Spacer(modifier = Modifier
+                        .width(4.dp)
+                        .height(48.dp))   // separador con misma altura
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        IconButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    isExporting = true
+                                    val fileName = generateFileName(
+                                        mode = selectionMode,
+                                        singleDate = selectedSingleDate,
+                                        dateRange = selectedDateRange
+                                    )
+                                    exportToExcel(
+                                        context = context,
+                                        notifications = notificaciones,
+                                        fileName = fileName,
+                                        shareAfterSave = true   // compartir tras guardar
+                                    )
+                                    isExporting = false
+                                }
+                            },
+                            enabled = !isExporting
+                        ) {
+                            Icon(
+                                Icons.Filled.Share,
+                                contentDescription = "Compartir",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         if (isExporting) {
                             CircularProgressIndicator(
                                 modifier = Modifier

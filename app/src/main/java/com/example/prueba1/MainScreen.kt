@@ -89,14 +89,9 @@ fun MainScreen(
                         title = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "Chekealo.ya",
+                                    text = "Chekealo.Ya",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "User (Daniel sanchez)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         },
