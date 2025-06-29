@@ -461,6 +461,14 @@ fun NotificationScreen(vm: NotificationViewModel) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
+    // Cuando el set filtrado cambia (por ejemplo, se quita el filtro)
+    // y la lista ya no empieza en el índice 0, volvemos al principio.
+    LaunchedEffect(notifs) {
+        if (listState.firstVisibleItemIndex != 0) {
+            listState.scrollToItem(0)
+        }
+    }
+
     // Este efecto escucha los eventos del ViewModel para mover la lista
     LaunchedEffect(key1 = true) {
         vm.uiEvent.collect { event ->

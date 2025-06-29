@@ -13,7 +13,6 @@ import kotlinx.coroutines.*
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 
@@ -190,7 +189,32 @@ object WebSocketManager {
                         }
                         return //
                     }
-                    // Puedes añadir otros eventos aquí si los necesitas
+                    "peer_left_room" -> {
+                        Log.w(TAG, "El servidor informó que el otro peer salió de la sala. Cerrando voluntariamente.")
+
+                        // 1. Dejamos claro que no queremos reconectar
+                        setShouldReconnect(ctx, false)
+
+                        // 2. Enviamos un “leave” para que el servidor registre nuestra salida
+                        try {
+                            val leavePayload = gson.toJson(
+                                mapOf("action" to "leave", "reason" to "peer_left_room")
+                            )
+                            ws.send(leavePayload)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error enviando leave tras peer_left_room", e)
+                        }
+
+                        // 3. Cerramos el socket
+                        ws.close(1000, "Closing because peer_left_room")
+
+                        // 4. Avisamos al resto de la app (UI, servicios, etc.)
+                        LocalBroadcastManager
+                            .getInstance(ctx)
+                            .sendBroadcast(Intent(WebSocketService.ACTION_SESSION_ENDED))
+
+                        return                // Nada más que procesar de este mensaje
+                    }
                 }
             }
 
