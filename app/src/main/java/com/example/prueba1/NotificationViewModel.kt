@@ -197,4 +197,5 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         return _filteredNotifications.firstOrNull()?.packageName
     }
 
+
 }
