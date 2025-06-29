@@ -1,5 +1,7 @@
 package com.minka.app
 
+import android.app.Activity
+import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -30,6 +32,8 @@ import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +64,16 @@ import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.*
 import com.example.prueba1.NotificationScreen
 
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontStyle
+
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.platform.LocalUriHandler
+
 sealed class Dest(val route: String, val icon: ImageVector, val label: String) {
     object Notifications: Dest("main", Icons.Default.Payment, "Pagos")
     object Tools: Dest("tools", Icons.Default.Build, "Herramientas")
@@ -79,6 +93,11 @@ fun MainScreen(
     val showFilters = remember { mutableStateOf(false) }
     val isLoading by vm.isLoading.collectAsState()
     val connectionStatus by vm.connectionStatus.collectAsState()
+
+    // --- Términos y Condiciones ---
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("checkealo_prefs", Context.MODE_PRIVATE) }
+    var termsAccepted by remember { mutableStateOf(prefs.getBoolean("terminos_aceptados", false)) }
 
     Prueba1Theme {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -264,6 +283,78 @@ fun MainScreen(
                         }
                     }
                 }
+            }
+
+            // Dialog de aceptación de T&C
+            if (!termsAccepted) {
+                // estado único de aceptación
+                var acceptAllChecked by remember { mutableStateOf(false) }
+                AlertDialog(
+                    onDismissRequest = { /* Previene descartar tocando fuera */ },
+                    title = { Text("Términos y Condiciones") },
+                    text = {
+                        val uriHandler = LocalUriHandler.current
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+                            // Instrucciones
+                            Text(
+                                "Pulsa los siguientes enlaces y léelos atentamente. Al marcar la casilla reconoces que has leído y aceptado los siguientes términos:",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+
+                            // Enlace a T&C
+                            ClickableText(
+                                text = buildAnnotatedString {
+                                    withStyle(
+                                        style = SpanStyle(
+                                            color = MaterialTheme.colorScheme.primary,
+                                            textDecoration = TextDecoration.Underline,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    ) { append("Términos y Condiciones") }
+                                },
+                                onClick = { uriHandler.openUri("https://checkealoya.com/terms") }
+                            )
+
+                            // Enlace a Política de Privacidad
+                            ClickableText(
+                                text = buildAnnotatedString {
+                                    withStyle(
+                                        style = SpanStyle(
+                                            color = MaterialTheme.colorScheme.primary,
+                                            textDecoration = TextDecoration.Underline,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    ) { append("Política de Privacidad") }
+                                },
+                                onClick = { uriHandler.openUri("https://checkealoya.com/terms") }
+                            )
+
+                            // Checkbox único
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = acceptAllChecked,
+                                    onCheckedChange = { acceptAllChecked = it }
+                                )
+                                Text("He leído y acepto todo lo anterior.")
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            enabled = acceptAllChecked,
+                            onClick = {
+                                prefs.edit().putBoolean("terminos_aceptados", true).apply()
+                                termsAccepted = true
+                            }
+                        ) { Text("Aceptar") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            (context as Activity).finishAffinity()
+                        }) { Text("Salir") }
+                    }
+                )
             }
         }
     }
