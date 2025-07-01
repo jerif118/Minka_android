@@ -43,8 +43,8 @@ class MyNotificationListenerService : NotificationListenerService() {
             "com.applemoncash"          to listOf("recibiste s/", "recibiste "),
             "pe.com.interbank.mobilebanking" to listOf("Interbank", "interbank"),
             "pe.indigital.tunki.user" to listOf(
-                "oh!pay | recibiste un pago",
-                "oh!pay|recibiste un pago"
+                "oh!pay | Recibiste un pago",
+                "oh!pay|Recibiste un pago"
             )
         )
 
@@ -98,7 +98,7 @@ class MyNotificationListenerService : NotificationListenerService() {
         val text   = extras.getCharSequence("android.text")?.toString()
         val appLbl = getApplicationName(packageManager, sbn.packageName)
 
-        Log.d("NotificationListener", "📨 NOTIFICACIÓN CRUDA RECIBIDA de [$appLbl]")
+        Log.d("NotificationListener", "NOTIFICACIÓN CRUDA RECIBIDA de [$appLbl]")
         Log.d("NotificationListener", "    Título: $title")
         Log.d("NotificationListener", "   Texto: $text")
 
@@ -106,7 +106,7 @@ class MyNotificationListenerService : NotificationListenerService() {
         val filters = titleFilters[sbn.packageName]
         if (filters != null) {
             val titleLower = title?.lowercase() ?: ""
-            if (filters.none { keyword -> titleLower.contains(keyword) }) return
+            if (filters.none { keyword -> titleLower.contains(keyword.lowercase()) }) return
         }
         // Validar contenido del mensaje si hay un filtro definido
         val contentPattern = contentFilters[sbn.packageName]
