@@ -23,8 +23,7 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
 
-    <!-- necesario para reiniciar el servicio tras un reboot -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
     <!-- servicio en primer plano genérico (API 28+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
 
@@ -99,15 +98,6 @@
             tools:ignore="ForegroundServicePermission" />
 
         <!-- Reinicia el servicio tras BOOT_COMPLETED / LOCKED_BOOT_COMPLETED -->
-        <receiver
-            android:name="com.example.prueba1.boot.BootReceiver"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
-            </intent-filter>
-        </receiver>
 
     </application>
 
