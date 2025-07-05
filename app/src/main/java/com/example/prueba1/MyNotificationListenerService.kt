@@ -63,7 +63,7 @@ class MyNotificationListenerService : NotificationListenerService() {
                 Pattern.CASE_INSENSITIVE
             ),
             "pe.indigital.tunki.user" to Pattern.compile(
-                "\\s*.+?te pagó\\s*s/\\s*[0-9]+(?:[.,][0-9]{1,2})?",
+                "\\s*.+?te pag[oó]\\s*S/?\\s*[0-9]+(?:[.,][0-9]{1,2})?",
                 Pattern.CASE_INSENSITIVE
             )
         )
@@ -243,7 +243,7 @@ class MyNotificationListenerService : NotificationListenerService() {
                     // Extract sender and amount from Tunki payment notifications using the notification text only
                     val body = text ?: ""
                     val pattern = Pattern.compile(
-                        "(.+?)\\s+te pagó\\s*s/\\s*([0-9]+(?:[.,][0-9]{1,2})?)",
+                        "(.+?)\\s+te pag[oó]\\s*S/?\\s*([0-9]+(?:[.,][0-9]{1,2})?)",
                         Pattern.CASE_INSENSITIVE
                     )
                     val matcher = pattern.matcher(body)

@@ -61,9 +61,14 @@ fun AppSettingsScreen(onBack: () -> Unit) {
         /* … resto de paquetes … */
     )
 
-    // Filtramos solo las apps instaladas de esa lista
-    val installedApps = pm.getInstalledApplications(0)
-        .filter { allowedPackages.contains(it.packageName) }
+    // Obtenemos ApplicationInfo solo de los paquetes permitidos que estén realmente instalados
+    val installedApps = allowedPackages.mapNotNull { pkg ->
+        try {
+            pm.getApplicationInfo(pkg, 0)
+        } catch (_: PackageManager.NameNotFoundException) {
+            null
+        }
+    }
 
     // Flow de los seleccionados en DataStore
     val selectedFlow = context.dataStore.data.map { prefs ->

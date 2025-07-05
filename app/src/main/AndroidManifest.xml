@@ -2,8 +2,13 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.minka.app"
     tools:ignore="ExtraText">
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
+    <queries>
+        <package android:name="pe.com.interbank.mobilebanking"/>
+        <package android:name="com.bcp.innovacxion.yapeapp"/>
+        <package android:name="com.applemoncash"/>
+        <package android:name="pe.indigital.tunki.user"/>
+        <package android:name="com.pdp.bim"/>
+    </queries>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"
         tools:ignore="ScopedStorage" />
