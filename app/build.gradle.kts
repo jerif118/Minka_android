@@ -11,8 +11,9 @@ android {
     defaultConfig {
         applicationId = "com.minka.llntq.app"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 4
+        //noinspection OldTargetApi
+        targetSdk = 35
+        versionCode = 5
         versionName = "2.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -50,6 +51,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    buildToolsVersion = "35.0.0"
 }
 
 
