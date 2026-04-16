@@ -36,10 +36,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import android.util.LruCache
 import com.minka.app.NotificationData
 import com.minka.app.NotificationViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -50,6 +53,43 @@ import com.minka.app.UiEvent
 
 class NotificationUI {
 
+}
+
+// --- Performance: cache de íconos para evitar jank al cargar/convertir drawables ---
+private object AppIconCache {
+    // ~4MB de cache para bitmaps pequeños de íconos
+    private val cacheSize = 4 * 1024 * 1024
+    private val lru = object : LruCache<String, android.graphics.Bitmap>(cacheSize) {
+        override fun sizeOf(key: String, value: android.graphics.Bitmap): Int = value.byteCount
+    }
+
+    fun get(packageName: String): android.graphics.Bitmap? = lru.get(packageName)
+    fun put(packageName: String, bmp: android.graphics.Bitmap) { lru.put(packageName, bmp) }
+}
+
+@Composable
+private fun rememberAppIconBitmap(packageName: String): androidx.compose.ui.graphics.ImageBitmap? {
+    val context = LocalContext.current
+    val pm = context.packageManager
+    var image by remember(packageName) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+
+    // Si ya está en cache, úsalo sin trabajo en UI
+    AppIconCache.get(packageName)?.let { return it.asImageBitmap() }
+
+    LaunchedEffect(packageName) {
+        // Carga y conversión fuera del hilo principal
+        val bmp = withContext(Dispatchers.IO) {
+            try {
+                val d = pm.getApplicationIcon(packageName)
+                d.toBitmap(96, 96, null) // tamaño razonable para listas
+            } catch (_: Exception) { null }
+        }
+        bmp?.let {
+            AppIconCache.put(packageName, it)
+            image = it.asImageBitmap()
+        }
+    }
+    return image
 }
 
 @Composable
@@ -149,13 +189,13 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
             .format(Instant.ofEpochMilli(n.date).atZone(ZoneId.systemDefault()))
     }
 
-    val isNew = remember(n.date) {
-        (System.currentTimeMillis() - n.date) < (15 * 60 * 1000L)
+    val isNew by remember {
+        derivedStateOf { (System.currentTimeMillis() - n.date) < (15 * 60 * 1000L) }
     }
 
     // --- INICIO DE LA MODIFICACIÓN ---
     // NUEVO: Este LaunchedEffect se encarga del parpadeo de 2 segundos para las NUEVAS notificaciones.
-    LaunchedEffect(key1 = n.id) {
+    LaunchedEffect(key1 = "${n.id}-${isNew}") {
         if (isNew) {
             repeat(2) {
                 blinkProgress.animateTo(
@@ -203,14 +243,7 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
                 .animateContentSize(animationSpec = tween(durationMillis = 300)),
             verticalAlignment = Alignment.Top
         ) {
-            val context = LocalContext.current
-            val pm = context.packageManager
-            val iconDrawable = try {
-                pm.getApplicationIcon(n.packageName)
-            } catch (_: Exception) {
-                null
-            }
-            val iconBitmap = iconDrawable?.toBitmap()?.asImageBitmap()
+            val iconBitmap = rememberAppIconBitmap(n.packageName)
 
             Box(
                 modifier = Modifier.padding(top = 8.dp, end = 12.dp)
@@ -304,8 +337,9 @@ fun NotificationCard(n: NotificationData, vm: NotificationViewModel) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Bottom
                 ) {
+                    val montoFmt = remember(n.amount) { "S/ %.2f".format(n.amount) }
                     Text(
-                        "S/ %.2f".format(n.amount),
+                        montoFmt,
                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
                         color = primaryTextColor
                     )
@@ -499,7 +533,11 @@ fun NotificationScreen(vm: NotificationViewModel) {
         contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(notifs, key = { it.id }) { n ->
+        items(
+            items = notifs,
+            key = { it.id },
+            contentType = { "notification" }
+        ) { n ->
             NotificationCard(n, vm)
         }
     }

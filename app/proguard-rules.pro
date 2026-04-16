@@ -19,7 +19,6 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
--keep class com.minka.** { *; }
 
 # Si usas Retrofit
 -keep class retrofit2.** { *; }
@@ -31,6 +30,7 @@
 -keepclassmembers class * {
    @com.google.gson.annotations.SerializedName <fields>;
 }
+-keepattributes Signature, *Annotation*, EnclosingMethod, InnerClasses
 
 # Para mantener vistas que usan onClick en XML
 -keepclassmembers class * {
@@ -55,6 +55,22 @@
 # ------------------------------
 # Reglas sugeridas por R8
 # ------------------------------
+############################
+# Apache POI / OOXML / XMLBeans (para exportación Excel)
+############################
+-keep class org.apache.poi.** { *; }
+-dontwarn org.apache.poi.**
+
+-keep class org.openxmlformats.schemas.** { *; }
+-dontwarn org.openxmlformats.schemas.**
+
+-keep class org.apache.xmlbeans.** { *; }
+-dontwarn org.apache.xmlbeans.**
+
+# Silenciar dependencias AWT/XML stream usadas indirectamente por POI
+-dontwarn java.awt.**
+-dontwarn javax.xml.stream.**
+
 -dontwarn aQute.bnd.annotation.spi.ServiceConsumer
 -dontwarn aQute.bnd.annotation.spi.ServiceProvider
 -dontwarn java.awt.Color
@@ -78,3 +94,21 @@
 -dontwarn net.sf.saxon.**
 -dontwarn org.apache.batik.**
 -dontwarn org.osgi.framework.**
+
+############################
+# OkHttp/Okio (si usas Retrofit)
+############################
+-dontwarn okhttp3.**
+-dontwarn okio.**
+
+############################
+# ContentProvider constructors (por FileProvider)
+############################
+-keepclassmembers class * extends android.content.ContentProvider {
+    public <init>();
+}
+
+############################
+# Coroutines (silenciar warnings comunes)
+############################
+-dontwarn kotlinx.coroutines.**
